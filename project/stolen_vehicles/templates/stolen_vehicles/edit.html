@@ -1,0 +1,8 @@
+<!-- templates/stolen_vehicles/edit.html -->
+<h2>Sửa thông tin xe trộm</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit" class="btn btn-primary">Cập nhật</button>
+  <a href="{% url 'vehicle_list' %}" class="btn btn-secondary">Hủy</a>
+</form>

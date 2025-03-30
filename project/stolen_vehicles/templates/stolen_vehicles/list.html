@@ -1,0 +1,21 @@
+<table>
+    <tr>
+      <th>Biển số</th>
+      <th>Màu xe</th>
+      <th>Model</th>
+      <th>Ngày báo mất</th>
+      <th>Thao tác</th>
+    </tr>
+    {% for vehicle in vehicles %}
+    <tr>
+      <td>{{ vehicle.plate }}</td>
+      <td>{{ vehicle.color }}</td>
+      <td>{{ vehicle.model }}</td>
+      <td>{{ vehicle.reported_date }}</td>
+      <td>
+        <a href="{% url 'edit_vehicle' vehicle.id %}">Sửa</a>
+        <a href="{% url 'delete_vehicle' vehicle.id %}">Xóa</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
