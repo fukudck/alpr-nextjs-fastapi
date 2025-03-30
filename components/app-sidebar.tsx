@@ -2,14 +2,8 @@
 
 import * as React from "react"
 import {
-  AudioWaveform,
   BookOpen,
   Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
   Settings2,
   SquareTerminal,
   House,
@@ -24,7 +18,6 @@ import {
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -125,22 +118,22 @@ const data = {
     },
     {
       name: "Danh sách phương tiện",
-      url: "#",
+      url: "vahicle_list",
       icon: CarFront,
     },
     {
       name: "Nhận diện hình ảnh",
-      url: "#",
+      url: "image_ALPR",
       icon: Image,
     },
     {
       name: "Nhận diện video",
-      url: "#",
+      url: "video_ALPR",
       icon: FileVideo,
     },
     {
       name: "Nhận diện bằng Live-Camera",
-      url: "#",
+      url: "livecam_ALPR",
       icon: Cctv,
     },
     {
