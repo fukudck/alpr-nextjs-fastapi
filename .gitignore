@@ -37,3 +37,6 @@ next-env.d.ts
 # python
 __pycache__/
 venv
+api/model/yolov8m.pt
+api/model/yolov8n.pt
+api/model/yolov8s.pt
