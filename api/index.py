@@ -17,6 +17,9 @@ from PIL import Image
 import re
 import os
 
+import imghdr
+from PIL import Image
+
 class RecognitionModel:
     def __init__(self, model_name):
         self.device = "cpu"
@@ -320,6 +323,25 @@ class ALPR:
         elapsed_time = end_time - start_time
         print("elapsed_time:{0}".format(elapsed_time) + "[sec]")
 
+def is_image(file_path: str) -> bool:
+    # Check using imghdr
+    if imghdr.what(file_path):
+        return True
+    
+    # Check using PIL (Pillow)
+    try:
+        with Image.open(file_path) as img:
+            img.verify()
+        return True
+    except Exception:
+        return False
+def is_video(file_path: str) -> bool:
+    cap = cv.VideoCapture(file_path)
+    if cap.isOpened():
+        cap.release()
+        return True
+    return False
+
 
 model_path = "api/model/yolov8n.pt"  # Model nhận diện phương tiện
 img_path = 'docs/sample/original/3.jpg'
@@ -336,6 +358,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def hello_fast_api():
     return {"message": "Hello from FastAPI"}
 
+
 @app.post("/api/image_LPR")
 async def upload_file(file: UploadFile = File(...)):
     if not file:
@@ -345,5 +368,23 @@ async def upload_file(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
+    # Validate if the uploaded file is an image
+    if not is_image(file_path):
+        os.remove(file_path)  # Delete invalid file
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
+    
     text = alpr.run_img(file_path)
     return JSONResponse(content=text)
+
+
+# @app.post("/api/video_LPR")
+# async def upload_file(file: UploadFile = File(...)):
+#     if not file:
+#         raise HTTPException(status_code=400, detail="No file part")
+#     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+#     with open(file_path, "wb") as buffer:
+#         shutil.copyfileobj(file.file, buffer)
+
+#     if not is_video(file_path):
+#         os.remove(file_path)
+#         raise HTTPException(status_code=400, detail="Invalid file type")

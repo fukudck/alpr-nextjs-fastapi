@@ -67,7 +67,7 @@ export default function Page() {
             </div>
 
             {/* Form Upload */}
-            <div className="justify-center flex col-span-3 rounded-xl bg-muted/50 py-10">
+            <div className="justify-center flex col-span-3 rounded-xl bg-muted/70 py-10">
               <div className="w-full max-w-sm items-center gap-1.5 justify-center">
                 <form onSubmit={handleSubmit} className="flex  flex-col">
                   <div className="grid gap-4 py-2">
