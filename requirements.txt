@@ -9,3 +9,4 @@ lapx>=0.5.2
 paddlepaddle
 paddleocr
 python-multipart
+redis
