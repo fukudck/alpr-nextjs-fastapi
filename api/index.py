@@ -5,8 +5,7 @@ import os
 import shutil
 import time
 import uuid
-import redis
-import json
+import mysql.connector
 from pydantic import BaseModel
 import time
 import cv2 as cv
@@ -335,7 +334,9 @@ class ALPR:
         elapsed_time = end_time - start_time
         del recognition_model
         gc.collect()
-        
+        results = {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
+        save_task_results(task_uuid, results["results"])
+        create_or_update_task(task_uuid, None, "video", "completed", video_path, elapsed_time)
         return {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
 
 def is_image(file_path: str) -> bool:
@@ -389,6 +390,48 @@ def frame_index_to_timestamp(frame_index: int, fps: float) -> str:
     
     return timestamp
 
+def create_or_update_task(task_id, user_id, task_type, status, source_url=None, process_time=None):
+    cursor.execute("""
+        INSERT INTO tasks (id, user_id, type, status, source_url, process_time)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            status = VALUES(status),
+            process_time = VALUES(process_time)
+    """, (task_id, user_id, task_type, status, source_url, process_time))
+    db.commit()
+
+def save_task_results(task_id: str, results: list):
+    for result in results:
+        timestamp = result.get("timestamp")
+        frame_number = result.get("frame_number")
+
+        # 1. Thêm vào task_results
+        cursor.execute("""
+            INSERT INTO task_results (task_id, frame_number, timestamp)
+            VALUES (%s, %s, %s)
+        """, (task_id, frame_number, timestamp))
+        db.commit()
+
+        result_id = cursor.lastrowid  # lấy id của dòng vừa thêm
+
+        # 2. Thêm các plates vào detected_vehicles
+        plates = result.get("plates", [])
+        for plate in plates:
+            cursor.execute("""
+                INSERT INTO detected_vehicles (
+                    result_id, vehicle_id, plate_text, confidence,
+                    vehicle_type, plate_image_url
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                result_id,
+                plate.get("vehicle_id"),
+                plate.get("text") if plate.get("text") != -1 else None,
+                plate.get("confidence") if plate.get("confidence") != -1 else None,
+                plate.get("vehicle_type"),
+                plate.get("plate_image") if plate.get("plate_image") != "None" else None
+            ))
+        db.commit()
+
 model_path = "api/model/yolov8n.pt"  # Model nhận diện phương tiện
 img_path = 'docs/sample/original/3.jpg'
 weights_path = "api/weights/wpodnet.pth"
@@ -399,7 +442,13 @@ alpr = ALPR(model_path, weights_path)
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+db = mysql.connector.connect(
+    host="localhost",
+    port=3306,
+    user="root",
+    database="vehicle_detection"
+)
+cursor = db.cursor()
 
 
 
@@ -439,7 +488,7 @@ async def start_image_task(file: UploadFile = File(...)):
     return JSONResponse(content=text)
 
 @app.post("/api/video_LPR")
-async def start_video_task(file: UploadFile = File(...)):
+async def start_video_task(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     if not file:
         raise HTTPException(status_code=400, detail="No file part")
     task_uuid = str(uuid.uuid4())  # Tạo UUID mới
@@ -461,6 +510,63 @@ async def start_video_task(file: UploadFile = File(...)):
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid video")
     
-    text = alpr.run_video(file_path, 5, task_uuid)
-    return JSONResponse(content=text)
+    create_or_update_task(task_uuid, None, "video", "processing", file_path)
+    background_tasks.add_task(alpr.run_video, file_path, 5, task_uuid)
+    # text = alpr.run_video(file_path, 5, task_uuid)
+    return {"task_id": task_uuid, "type": "video", "status": "processing"}
 
+@app.get("/task-status/{task_id}")
+async def get_task_status(task_id: str):
+    # Lấy thông tin task
+    cursor.execute("SELECT type, status, source_url, process_time FROM tasks WHERE id = %s", (task_id,))
+    task_row = cursor.fetchone()
+    
+    if not task_row:
+        return {"status": "not_found"}
+    
+    task_type, status, source_url, process_time = task_row
+
+    # Lấy tất cả các frame result
+    cursor.execute("""
+        SELECT id, frame_number, timestamp
+        FROM task_results
+        WHERE task_id = %s
+        ORDER BY frame_number
+    """, (task_id,))
+    result_rows = cursor.fetchall()
+
+    results = []
+    for result in result_rows:
+        result_id, frame_number, timestamp = result
+
+        # Lấy tất cả plates trong từng frame
+        cursor.execute("""
+            SELECT vehicle_id, plate_text, confidence, vehicle_type, plate_image_url
+            FROM detected_vehicles
+            WHERE result_id = %s
+        """, (result_id,))
+        plate_rows = cursor.fetchall()
+
+        plates = []
+        for plate in plate_rows:
+            vehicle_id, text, confidence, vehicle_type, plate_image = plate
+            plates.append({
+                "vehicle_id": vehicle_id,
+                "text": text if text is not None else -1,
+                "confidence": confidence if confidence is not None else -1,
+                "vehicle_type": vehicle_type,
+                "plate_image": plate_image if plate_image else "None"
+            })
+
+        results.append({
+            "timestamp": timestamp,
+            "frame_number": frame_number,
+            "plates": plates
+        })
+
+    return {
+        "uuid": task_id,
+        "type": task_type,
+        "status": status,
+        "results": results
+    }
