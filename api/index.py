@@ -203,7 +203,7 @@ class ALPR:
         img = cv.imread(img_path)
         results = self.image_recognition_model.predict_without_track(img)
         all_texts = []  # Danh sách lưu kết quả OCR
-        save_path = f'content/{run_uuid}'
+        save_path = f'task_results/{run_uuid}'
         order = 0
 
         os.makedirs(save_path, exist_ok=True)  # Tạo thư mục riêng theo UUID
@@ -294,14 +294,15 @@ class ALPR:
             
         return annotator.result(), plates
     
-    def run_video(self, video_path, n_skip_frame):
+    def run_video(self, video_path, n_skip_frame, task_uuid):
         start_time = time.time()
         cap = cv.VideoCapture(video_path)
         self.frame_width = int(cap.get(3))
         self.frame_height = int(cap.get(4))
         fps = int(cap.get(5))
         size = (self.frame_width, self.frame_height)
-        output = cv.VideoWriter("uploads/output.mp4",
+        os.makedirs(f"task_results/{task_uuid}", exist_ok=True)
+        output = cv.VideoWriter(f"task_results/{task_uuid}/{task_uuid}.mp4",
                                 cv.VideoWriter_fourcc(*'mp4v'),
                                 fps, size)
         results = []
@@ -328,13 +329,14 @@ class ALPR:
                 results.append({"timestamp": frame_index_to_timestamp(n_frame, fps),"frame_number": n_frame, "plates": plates})
             output.write(annotated_frame)
         cap.release()
+        output.release()
         cv.destroyAllWindows()
         end_time = time.time()
         elapsed_time = end_time - start_time
         del recognition_model
         gc.collect()
         
-        return {"uuid": "video", "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
+        return {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
 
 def is_image(file_path: str) -> bool:
     # Check using imghdr
@@ -411,14 +413,20 @@ def hello_fast_api():
 
 
 @app.post("/api/image_LPR")
-async def upload_file1(file: UploadFile = File(...)):
+async def start_image_task(file: UploadFile = File(...)):
     if not file:
         raise HTTPException(status_code=400, detail="No file part")
-    task_uuid = str(uuid.uuid4())
-    # file_ext = os.path.splitext(file.filename)[-1].lower()
-    # file_name = f"{task_uuid}{file_ext}"
-    # file_path = os.path.join(UPLOAD_FOLDER, file_name)
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    task_uuid = str(uuid.uuid4())  # Tạo UUID mới
+    file_ext = os.path.splitext(file.filename)[-1].lower()  # Lấy phần mở rộng
+    file_name = f"{task_uuid}{file_ext}"  # Đặt tên file
+
+    # Tạo thư mục riêng cho UUID
+    task_folder = os.path.join(UPLOAD_FOLDER, task_uuid)
+    os.makedirs(task_folder, exist_ok=True)  # Tạo thư mục nếu chưa có
+
+    file_path = os.path.join(task_folder, file_name)  # Đường dẫn đầy đủ
+
+    # Lưu file vào thư mục UUID
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
@@ -431,14 +439,20 @@ async def upload_file1(file: UploadFile = File(...)):
     return JSONResponse(content=text)
 
 @app.post("/api/video_LPR")
-async def upload_file(file: UploadFile = File(...)):
+async def start_video_task(file: UploadFile = File(...)):
     if not file:
         raise HTTPException(status_code=400, detail="No file part")
-    task_uuid = str(uuid.uuid4())
-    # file_ext = os.path.splitext(file.filename)[-1].lower()
-    # file_name = f"{task_uuid}{file_ext}"
-    # file_path = os.path.join(UPLOAD_FOLDER, file_name)
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    task_uuid = str(uuid.uuid4())  # Tạo UUID mới
+    file_ext = os.path.splitext(file.filename)[-1].lower()  # Lấy phần mở rộng
+    file_name = f"{task_uuid}{file_ext}"  # Đặt tên file
+
+    # Tạo thư mục riêng cho UUID
+    task_folder = os.path.join(UPLOAD_FOLDER, task_uuid)
+    os.makedirs(task_folder, exist_ok=True)  # Tạo thư mục nếu chưa có
+
+    file_path = os.path.join(task_folder, file_name)  # Đường dẫn đầy đủ
+
+    # Lưu file vào thư mục UUID
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
@@ -447,6 +461,6 @@ async def upload_file(file: UploadFile = File(...)):
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid video")
     
-    text = alpr.run_video(file_path, 5)
+    text = alpr.run_video(file_path, 5, task_uuid)
     return JSONResponse(content=text)
 

@@ -43,4 +43,4 @@ api/model/yolov8s.pt
 
 #user specific
 uploads
-content
+task_results
