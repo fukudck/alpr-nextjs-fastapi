@@ -247,6 +247,7 @@ class ALPR:
                 text, score = self.paddle_ocr_2.ocr(warped_lp)
                 all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"{save_path}/annotated_{order}.jpg", "warped_lp": f"{save_path}/warped_{order}.jpg" })
         save_image_task_result(run_uuid, all_texts)
+        create_or_update_task(run_uuid, None, "image", "completed", img_path, None)
         return {"uuid": run_uuid, "type": "image", "status": "completed", "results": all_texts}
     
     def plot_boxes(self, results ,frame, isSkip):
