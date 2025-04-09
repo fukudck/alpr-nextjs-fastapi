@@ -190,30 +190,34 @@ class POCR:
 
         return -1, -1
 
-class ALPR:
+
+class ALPRModel:
     def __init__(self, recognition_model_name, alpr_model_weights):
         self.recognition_model_name = recognition_model_name
-        self.image_recognition_model = RecognitionModel(self.recognition_model_name)
         self.wpodnet = WPODNET(alpr_model_weights)
         self.wpodnet_model = self.wpodnet.wpodnet_model
         self.wpodnet_predictor = self.wpodnet.wpodnet_predictor
+
+class ALPRModel_Image(ALPRModel):
+    def __init__(self, recognition_model_name, alpr_model_weights):
+        super().__init__(recognition_model_name, alpr_model_weights)
+        self.recognition_model = RecognitionModel(self.recognition_model_name)
         self.paddle_ocr = POCR()
-        self.paddle_ocr_2 = POCR()
-    def run_img(self, img_path, run_uuid):
+    def run(self, img_path, run_uuid):
         img = cv.imread(img_path)
-        results = self.image_recognition_model.predict_without_track(img)
-        all_texts = []  # Danh sách lưu kết quả OCR
+        results = self.recognition_model.predict_without_track(img)
+        all_texts = []
         save_path = f'task_results/{run_uuid}'
         order = 0
 
         os.makedirs(save_path, exist_ok=True)  # Tạo thư mục riêng theo UUID
+
         for r in results:
             result = r.boxes.cpu()
             b = result.xyxy
             order += 1
 
             for i, loc in enumerate(b):
-                
                 x1, x2 = int(loc[0]), int(loc[2])
                 y1, y2 = int(loc[1]), int(loc[3])
 
@@ -221,17 +225,6 @@ class ALPR:
                 frame_to_pil = Image.fromarray(img[y1:y2, x1:x2])
                 lpr_frame_prediction = self.wpodnet_predictor.predict(frame_to_pil, scaling_ratio=1)
                 frame_to_pil = np.asarray(frame_to_pil)
-                # DDeos bt cc gi het
-                # cv.imwrite(f'content/{i}.jpg', frame_to_pil)
-
-                # bounds
-                # bound_xy1, bound_xy2, bound_xy3, bound_xy4 = lpr_frame_prediction.bounds.tolist()
-                # min_x = min(bound_xy1[0], bound_xy2[0], bound_xy3[0], bound_xy4[0])
-                # max_x = max(bound_xy1[0], bound_xy2[0], bound_xy3[0], bound_xy4[0])
-                # min_y = min(bound_xy1[1], bound_xy2[1], bound_xy3[1], bound_xy4[1])
-                # max_y = max(bound_xy1[1], bound_xy2[1], bound_xy3[1], bound_xy4[1])
-                # img_bounds = image[min_y+y1:max_y+y1, min_x+x1:max_x+x1]
-                # cv.imwrite(f'/content/bounds_{i}.jpg',img_bounds)
 
                 # paddle ocr
                 annotated_lp = lpr_frame_prediction.annotate()
@@ -241,62 +234,19 @@ class ALPR:
                 warped_lp = lpr_frame_prediction.warp()
                 warped_lp = np.asarray(warped_lp)
                 cv.imwrite(f'{save_path}/warped_{order}.jpg', warped_lp)
-                # warped_lp = paddle_ocr.preprocess(warped_lp)
-                # warped_lp = paddle_ocr.preprocess(img_bounds)
 
-                text, score = self.paddle_ocr_2.ocr(warped_lp)
+                text, score = self.paddle_ocr.ocr(warped_lp)
                 all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"{save_path}/annotated_{order}.jpg", "warped_lp": f"{save_path}/warped_{order}.jpg" })
         save_image_task_result(run_uuid, all_texts)
         create_or_update_task(run_uuid, None, "image", "completed", img_path, None)
         return {"uuid": run_uuid, "type": "image", "status": "completed", "results": all_texts}
-    
-    def plot_boxes(self, results ,frame, isSkip):
-        annotator = Annotator(frame)
-        plates = []
-        for r in results:
-            result = r.boxes.cpu()
-            if result.id is None:
-                continue
 
-            objects_id = result.id
-            target_objects = ['car', 'motorcycle', 'bus', 'truck']
-            location_idx = []
-            for tar in target_objects:
-                temp_id = list(r.names.keys())[list(r.names.values()).index(tar)]
-                temp_check = np.where(result.cls == temp_id)
-                if len(temp_check[0]) > 0:
-                    for temp in temp_check[0]:
-                        location_idx.append((temp,tar))
-            
-            
-            
-            for i,vehicle in location_idx:
-                b = result.xyxy[i]
-                object_id = int(objects_id[i].item())
-                x1, y1, x2, y2 = map(int, b)
-                annotator.box_label((x1, y1, x2, y2), str(object_id), color=(0, 0, 255), txt_color=(255, 255, 255))
-                
-                #POCR
-                if not isSkip:
-                    vehicle_roi = frame[y1:y2, x1:x2]
-
-                    # Kiểm tra nếu vùng cắt hợp lệ
-                    if vehicle_roi.shape[0] > 0 and vehicle_roi.shape[1] > 0:
-                        vehicle_image = Image.fromarray(cv.cvtColor(vehicle_roi, cv.COLOR_BGR2RGB))
-                        lpr_frame_prediction = self.wpodnet_predictor.predict(vehicle_image, scaling_ratio=1)
-                        if lpr_frame_prediction.confidence > 0.5:
-                            warped_lp = lpr_frame_prediction.warp()
-                            warped_lp = np.asarray(warped_lp)
-                            text, score = self.paddle_ocr.ocr(warped_lp)
-                            # text = f"{object_id}, {text}    {score}"
-                            # print(text)
-                            # print(vehicle)
-                            plates.append({"vehicle_id": object_id, "text": text, "confidence": score, "vehicle_type": vehicle, "plate_image": "None"})
-
-            
-        return annotator.result(), plates
-    
-    def run_video(self, video_path, n_skip_frame, task_uuid):
+class ALPRModel_Video(ALPRModel):
+    def __init__(self, recognition_model_name, alpr_model_weights):
+        super().__init__(recognition_model_name, alpr_model_weights)
+        self.recognition_model = RecognitionModel(self.recognition_model_name)
+        self.paddle_ocr = POCR()
+    def run(self, video_path, n_skip_frame, task_uuid):
         start_time = time.time()
         cap = cv.VideoCapture(video_path)
         self.frame_width = int(cap.get(3))
@@ -309,8 +259,6 @@ class ALPR:
                                 fps, size)
         results = []
         last_results = None
-        recognition_model = RecognitionModel(self.recognition_model_name)
-        
 
         while cap.isOpened():
             success, frame = cap.read()
@@ -324,7 +272,7 @@ class ALPR:
                     annotated_frame = frame
                 output.write(annotated_frame)
                 continue
-            last_results = recognition_model.predict(frame)
+            last_results = self.recognition_model.predict(frame)
 
             annotated_frame, plates = self.plot_boxes(last_results, frame, False)
             if plates:
@@ -335,12 +283,50 @@ class ALPR:
         cv.destroyAllWindows()
         end_time = time.time()
         elapsed_time = end_time - start_time
-        del recognition_model
+        del self.recognition_model
         gc.collect()
         results = {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
         save_task_results(task_uuid, results["results"])
         create_or_update_task(task_uuid, None, "video", "completed", video_path, elapsed_time)
-        return {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
+        
+    def plot_boxes(self, results ,frame, isSkip):
+        annotator = Annotator(frame)
+        plates = []
+        for r in results:
+            result = r.boxes.cpu()
+            if result.id is None:
+                continue
+                
+            objects_id = result.id
+            target_objects = ['car', 'motorcycle', 'bus', 'truck']
+            location_idx = []
+            for tar in target_objects:
+                temp_id = list(r.names.keys())[list(r.names.values()).index(tar)]
+                temp_check = np.where(result.cls == temp_id)
+                if len(temp_check[0]) > 0:
+                    for temp in temp_check[0]:
+                        location_idx.append((temp,tar))
+
+            for i,vehicle in location_idx:
+                b = result.xyxy[i]
+                object_id = int(objects_id[i].item())
+                x1, y1, x2, y2 = map(int, b)
+                annotator.box_label((x1, y1, x2, y2), str(object_id), color=(0, 0, 255), txt_color=(255, 255, 255))
+
+                if not isSkip:
+                    vehicle_roi = frame[y1:y2, x1:x2]
+                    # Kiểm tra nếu vùng cắt hợp lệ
+                    if vehicle_roi.shape[0] > 0 and vehicle_roi.shape[1] > 0:
+                        vehicle_image = Image.fromarray(cv.cvtColor(vehicle_roi, cv.COLOR_BGR2RGB))
+                        lpr_frame_prediction = self.wpodnet_predictor.predict(vehicle_image, scaling_ratio=1)
+                        if lpr_frame_prediction.confidence > 0.5:
+                            warped_lp = lpr_frame_prediction.warp()
+                            warped_lp = np.asarray(warped_lp)
+                            text, score = self.paddle_ocr.ocr(warped_lp)
+                            plates.append({"vehicle_id": object_id, "text": text, "confidence": score, "vehicle_type": vehicle, "plate_image": "None"})
+        return annotator.result(), plates
+
+
 
 def is_image(file_path: str) -> bool:
     # Check using imghdr
@@ -470,12 +456,17 @@ def save_image_task_result(task_id: str, results: list):
         ))
         db.commit()
 
+def run_ALPRModel_Video(model_path, weights_path, video_path, n_skip_frame, task_uuid):
+    alpr_video = ALPRModel_Video(model_path, weights_path)
+    alpr_video.run(video_path, n_skip_frame, task_uuid)
+    
+
 model_path = "api/model/yolov8n.pt"  # Model nhận diện phương tiện
 img_path = 'docs/sample/original/3.jpg'
 weights_path = "api/weights/wpodnet.pth"
 UPLOAD_FOLDER = "uploads" 
 
-alpr = ALPR(model_path, weights_path)
+alpr_image = ALPRModel_Image(model_path, weights_path)
 
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
@@ -522,7 +513,7 @@ async def start_image_task(file: UploadFile = File(...)):
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
     create_or_update_task(task_uuid, None, "image", "processing", file_path)
-    text = alpr.run_img(file_path, task_uuid)
+    text = alpr_image.run(file_path, task_uuid)
     return JSONResponse(content=text)
 
 @app.post("/api/video_LPR")
@@ -549,8 +540,7 @@ async def start_video_task(background_tasks: BackgroundTasks, file: UploadFile =
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid video")
     
     create_or_update_task(task_uuid, None, "video", "processing", file_path)
-    background_tasks.add_task(alpr.run_video, file_path, 5, task_uuid)
-    # text = alpr.run_video(file_path, 5, task_uuid)
+    background_tasks.add_task(run_ALPRModel_Video, model_path , weights_path, file_path, 5, task_uuid)
     return {"task_id": task_uuid, "type": "video", "status": "processing"}
 
 @app.get("/task-status/{task_id}")
