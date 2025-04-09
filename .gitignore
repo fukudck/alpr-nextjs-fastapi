@@ -40,3 +40,7 @@ venv
 api/model/yolov8m.pt
 api/model/yolov8n.pt
 api/model/yolov8s.pt
+
+#user specific
+uploads
+task_results
