@@ -198,6 +198,7 @@ class ALPR:
         self.wpodnet_model = self.wpodnet.wpodnet_model
         self.wpodnet_predictor = self.wpodnet.wpodnet_predictor
         self.paddle_ocr = POCR()
+        self.paddle_ocr_2 = POCR()
     def run_img(self, img_path, run_uuid):
         img = cv.imread(img_path)
         results = self.image_recognition_model.predict_without_track(img)
@@ -243,8 +244,9 @@ class ALPR:
                 # warped_lp = paddle_ocr.preprocess(warped_lp)
                 # warped_lp = paddle_ocr.preprocess(img_bounds)
 
-                text, score = self.paddle_ocr.ocr(warped_lp)
-                all_texts.append({ "order": order, "text": text, "score": score})
+                text, score = self.paddle_ocr_2.ocr(warped_lp)
+                all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"{save_path}/annotated_{order}.jpg", "warped_lp": f"{save_path}/warped_{order}.jpg" })
+        save_image_task_result(run_uuid, all_texts)
         return {"uuid": run_uuid, "type": "image", "status": "completed", "results": all_texts}
     
     def plot_boxes(self, results ,frame, isSkip):
@@ -432,6 +434,41 @@ def save_task_results(task_id: str, results: list):
             ))
         db.commit()
 
+def save_image_task_result(task_id: str, results: list):
+    # Tạo bản ghi task_result
+    cursor.execute("""
+        INSERT INTO task_results (task_id, frame_number, timestamp)
+        VALUES (%s, %s, %s)
+    """, (task_id, "0", "0"))  # timestamp cố định "0" cho ảnh
+    db.commit()
+
+    result_id = cursor.lastrowid  # Lấy id mới tạo
+    # Lặp qua từng kết quả (mỗi ảnh)
+    for item in results:
+        order = item.get("order")
+        text = item.get("text", -1)
+        score = item.get("score", -1)
+        annotated_lp = item.get("annotated_lp")
+        warped_lp = item.get("warped_lp")
+
+
+
+        # Lưu vào detected_vehicles
+        cursor.execute("""
+            INSERT INTO detected_vehicles (
+                result_id, vehicle_id, plate_text, confidence,
+                vehicle_type, plate_image_url
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            result_id,
+            order,  # tạm dùng order làm vehicle_id
+            text if text != -1 else None,
+            score if score != -1 else None,
+            "unknown",  # không có trường vehicle_type → gán mặc định
+            warped_lp or None
+        ))
+        db.commit()
+
 model_path = "api/model/yolov8n.pt"  # Model nhận diện phương tiện
 img_path = 'docs/sample/original/3.jpg'
 weights_path = "api/weights/wpodnet.pth"
@@ -483,7 +520,7 @@ async def start_image_task(file: UploadFile = File(...)):
     if not is_image(file_path):
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
-    
+    create_or_update_task(task_uuid, None, "image", "processing", file_path)
     text = alpr.run_img(file_path, task_uuid)
     return JSONResponse(content=text)
 
