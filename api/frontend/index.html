@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebRTC + WebSocket</title>
+    <style>
+      video { width: 45%; margin: 10px; border: 2px solid #ccc; border-radius: 8px; }
+      #results { margin-top: 20px; font-size: 18px; font-family: monospace; background: #eee; padding: 10px; }
+    </style>
+  </head>
+  <body>
+    <h2>📹 Video gốc | Video xử lý (Testing ZONE)</h2>
+    <video id="local" autoplay muted playsinline></video>
+    <video id="remote" autoplay playsinline></video>
+
+    <div id="results">⏳ Đang chờ nhận diện...</div>
+
+    <script>
+      const pc = new RTCPeerConnection();
+      const localVideo = document.getElementById('local');
+      const remoteVideo = document.getElementById('remote');
+      const resultDiv = document.getElementById('results');
+
+      // Gửi webcam qua WebRTC
+      (async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        localVideo.srcObject = stream;
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+        pc.ontrack = (event) => {
+          remoteVideo.srcObject = event.streams[0];
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const res = await fetch("/api/stream_offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+        });
+
+        const answer = await res.json();
+        await pc.setRemoteDescription(answer);
+      })();
+
+      // Nhận JSON từ WebSocket
+      const socket = new WebSocket("ws://" + location.host + "/api/stream_ws");
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        resultDiv.textContent = "📸 Biển số: " + data.plates.map(p => p.plate).join(", ") +
+                                " | Thời gian: " + new Date(data.timestamp * 1000).toLocaleTimeString();
+      };
+    </script>
+  </body>
+</html>

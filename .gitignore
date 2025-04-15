@@ -44,3 +44,5 @@ api/model/yolov8s.pt
 #user specific
 uploads
 task_results
+api/notebook.ipynb
+api/.ipynb_checkpoints/notebook-checkpoint.ipynb
