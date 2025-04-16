@@ -9,11 +9,12 @@ export type video_results = {
   type: string
   number_plate: string
   score: number
+  time: string
 }
 
 export const columns: ColumnDef<video_results>[] = [
   {
-    accessorKey: "oID",
+    accessorKey: "id",
     header: "ID",
   },
   {
@@ -32,8 +33,5 @@ export const columns: ColumnDef<video_results>[] = [
     accessorKey: "time",
     header: "Thời gian xuất hiện",
   },
-  {
-    accessorKey: "score",
-    header: "Tỉ lệ chính xác",
-  },
-]
+];
+

@@ -31,6 +31,9 @@ import imghdr
 from PIL import Image
 from typing import Dict
 
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+
 
 
 class RecognitionModel:
@@ -563,7 +566,7 @@ def save_task_results(task_id: str, results: list):
                 result_id,
                 plate.get("vehicle_id"),
                 plate.get("text") if plate.get("text") != -1 else None,
-                plate.get("confidence") if plate.get("confidence") != -1 else None,
+                float (plate.get("confidence")) if plate.get("confidence") != -1 else None,
                 plate.get("vehicle_type"),
                 plate.get("plate_image") if plate.get("plate_image") != "None" else None
             ))
@@ -599,7 +602,7 @@ def save_image_task_result(task_id: str, results: list):
             result_id,
             order,  # tạm dùng order làm vehicle_id
             text if text != -1 else None,
-            score if score != -1 else None,
+            float(score) if score != -1 else None,
             vehicle_type, 
             warped_lp or None
         ))
@@ -624,6 +627,17 @@ websocket_clients = set()  # Danh sách client WebSocket đang kết nối
 
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
+origins = [
+    "http://localhost:3000",  # Cho phép React frontend truy cập
+    "http://127.0.0.1:3000"
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # hoặc ["*"] để cho tất cả (chỉ nên dùng khi phát triển)
+    allow_credentials=True,
+    allow_methods=["*"],    # Cho phép tất cả các method: GET, POST, PUT,...
+    allow_headers=["*"],    # Cho phép mọi headers
+)
 
 db = mysql.connector.connect(
     host="localhost",
@@ -803,6 +817,38 @@ app.mount("/stream_test", StaticFiles(directory="api/frontend", html=True), name
 print(f"Torch GPU CUDA available: {torch.cuda.is_available()}")
 gpu_available  = paddle.device.is_compiled_with_cuda()
 print("GPU available:", gpu_available)
+
+@app.get("/task-image/{task_id}")
+async def get_task_images(task_id: str):
+    # Truy vấn tất cả ảnh biển số từ detected_vehicles
+    cursor.execute("""
+        SELECT plate_image_url 
+        FROM detected_vehicles 
+        WHERE result_id IN (
+            SELECT id FROM task_results WHERE task_id = %s
+        )
+    """, (task_id,))
+    images = cursor.fetchall()
+
+    if not images:
+        raise HTTPException(status_code=404, detail="Không tìm thấy hình ảnh")
+
+    return {"task_id": task_id, "images": [img[0] for img in images]}
+    cursor.execute("""
+        SELECT source_url 
+        FROM tasks 
+        WHERE id = %s
+    """, (task_id,))
+    
+    result = cursor.fetchone()
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return {
+        "task_id": task_id,
+        "source_url": result[0]
+    }
 
 # import sys
 # import traceback
