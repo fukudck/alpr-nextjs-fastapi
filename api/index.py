@@ -247,7 +247,7 @@ class ALPRModel_Image(ALPRModel):
                 cv.imwrite(f'{save_path}/warped_{order}.jpg', warped_lp)
 
                 text, score = self.paddle_ocr.ocr(warped_lp)
-                all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"{save_path}/annotated_{order}.jpg", "warped_lp": f"{save_path}/warped_{order}.jpg", "vehicle_type": object_name })
+                all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"/task_results/{run_uuid}/annotated_{order}.jpg", "warped_lp": f"/task_results/{run_uuid}/warped_{order}.jpg", "vehicle_type": object_name })
         
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -273,7 +273,7 @@ class ALPRModel_Video(ALPRModel):
 
         # Tạo thư mục và khởi tạo vị trí lưu video
         os.makedirs(f"public/task_results/{task_uuid}", exist_ok=True)
-        output = cv.VideoWriter(f"task_results/{task_uuid}/{task_uuid}.mp4",
+        output = cv.VideoWriter(f"public/task_results/{task_uuid}/{task_uuid}.mp4",
                                 cv.VideoWriter_fourcc(*'mp4v'),
                                 fps, size)
         
@@ -301,14 +301,14 @@ class ALPRModel_Video(ALPRModel):
             if n_skip_frame > 0:
                 if n_frame % n_skip_frame != 0:
                     if last_results is not None:
-                        annotated_frame, plates = self.plot_boxes(last_results, frame, True)
+                        annotated_frame, plates = self.plot_boxes(last_results, frame, True, run_uuid=task_uuid)
                     else:
                         annotated_frame = frame
                     output.write(annotated_frame)
                     continue
             last_results = self.recognition_model.predict(frame)
 
-            annotated_frame, plates = self.plot_boxes(last_results, frame, False)
+            annotated_frame, plates = self.plot_boxes(last_results, frame, False, run_uuid=task_uuid)
             if plates:
                 results.append({"timestamp": frame_index_to_timestamp(n_frame, fps),"frame_number": n_frame, "plates": plates})
             output.write(annotated_frame)
@@ -324,9 +324,9 @@ class ALPRModel_Video(ALPRModel):
         # Ghi lại kết quả vào db
         results = {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
         save_task_results(task_uuid, results["results"])
-        create_or_update_task(task_uuid, None, "video", "completed", video_path, elapsed_time)
+        create_or_update_task(task_uuid, None, "video", "completed", f"/task_results/{task_uuid}/{task_uuid}.mp4", elapsed_time)
         
-    def plot_boxes(self, results ,frame, isSkip):
+    def plot_boxes(self, results ,frame, isSkip, run_uuid):
         # Khởi tạo Annotator để vẽ lên frame
         annotator = Annotator(frame)
 
@@ -368,8 +368,9 @@ class ALPRModel_Video(ALPRModel):
                         if lpr_frame_prediction.confidence > 0.5:
                             warped_lp = lpr_frame_prediction.warp()
                             warped_lp = np.asarray(warped_lp)
+                            cv.imwrite(f'public/task_results/{run_uuid}/warped_{track_id}.jpg', warped_lp)
                             text, score = self.paddle_ocr.ocr(warped_lp)
-                            plates.append({"vehicle_id": track_id, "text": text, "confidence": score, "vehicle_type": object_name, "plate_image": "None"})
+                            plates.append({"vehicle_id": track_id, "text": text, "confidence": score, "vehicle_type": object_name, "plate_image": f'/task_results/{run_uuid}/warped_{track_id}.jpg'})
         
         return annotator.result(), plates
 
@@ -664,7 +665,7 @@ async def start_image_task(file: UploadFile = File(...)):
     if not is_image(file_path):
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
-    create_or_update_task(task_uuid, None, "image", "processing", f"public/upload/{task_uuid}/{os.path.basename(file_path)}")
+    create_or_update_task(task_uuid, None, "image", "processing", f"/uploads/{task_uuid}/{os.path.basename(file_path)}")
     text = alpr_image.run(file_path, task_uuid)
     return JSONResponse(content=text)
 
@@ -691,7 +692,7 @@ async def start_video_task(background_tasks: BackgroundTasks, file: UploadFile =
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid video")
     
-    create_or_update_task(task_uuid, None, "video", "processing", f"public/upload/{task_uuid}/{os.path.basename(file_path)}")
+    create_or_update_task(task_uuid, None, "video", "processing", f"/uploads/{task_uuid}/{os.path.basename(file_path)}")
     background_tasks.add_task(run_ALPRModel_Video, model_path , weights_path, file_path, 5, task_uuid)
     return {"task_id": task_uuid, "type": "video", "status": "processing"}
 
@@ -721,7 +722,7 @@ async def get_task_status(task_id: str):
 
         # Lấy tất cả plates trong từng frame
         cursor.execute("""
-            SELECT vehicle_id, plate_text, confidence, vehicle_type, plate_image_url
+            SELECT vehicle_id, plate_text, confidence, vehicle_type, plate_image_url, is_blacklisted
             FROM detected_vehicles
             WHERE result_id = %s
         """, (result_id,))
@@ -729,13 +730,14 @@ async def get_task_status(task_id: str):
 
         plates = []
         for plate in plate_rows:
-            vehicle_id, text, confidence, vehicle_type, plate_image = plate
+            vehicle_id, text, confidence, vehicle_type, plate_image, is_blacklisted = plate
             plates.append({
                 "vehicle_id": vehicle_id,
                 "text": text if text is not None else -1,
                 "confidence": confidence if confidence is not None else -1,
                 "vehicle_type": vehicle_type,
-                "plate_image": plate_image if plate_image else "None"
+                "plate_image": plate_image if plate_image else "None",
+                "is_blacklisted": is_blacklisted
             })
 
         results.append({

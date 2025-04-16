@@ -4,31 +4,36 @@ import * as React from "react"
 import {
   BookOpen,
   Bot,
+  Cctv,
+  Command,
+  FileVideo,
+  Frame,
+  House,
+  LifeBuoy,
+  Map,
+  PieChart,
+  Radar,
+  Send,
   Settings2,
   SquareTerminal,
-  House,
-  CarFront,
   Image,
-  FileVideo,
-  Cctv,
+  CarFront,
   History,
-  
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
+import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarRail,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar"
-
-// This is sample data.
-
-
 
 const data = {
   user: {
@@ -38,103 +43,51 @@ const data = {
   },
   navMain: [
     {
-      title: "Playground",
+      title: "Nhận diện p.t vi phạm",
       url: "#",
-      icon: SquareTerminal,
+      icon: Radar,
       isActive: true,
-      
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
       items: [
         {
-          title: "Genesis",
-          url: "#",
+          title: "Hình ảnh",
+          url: "image_ALPR",
+          item_icon: Image,
         },
         {
-          title: "Explorer",
-          url: "#",
+          title: "Video",
+          url: "video_ALPR",
+          item_icon: FileVideo,
         },
         {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
+          title: "Live-Camera(Beta)",
+          url: "livecam_ALPR",
+          item_icon: Cctv,
         },
       ],
     },
   ],
+  navSecondary: [
+    {
+      title: "Support",
+      url: "#",
+      icon: LifeBuoy,
+    },
+    {
+      title: "Feedback",
+      url: "#",
+      icon: Send,
+    },
+  ],
   projects: [
     {
-      name: "Trang chủ",
+      name: "Trang Chủ",
       url: "#",
       icon: House,
     },
     {
-      name: "Danh sách phương tiện",
-      url: "vahicle_list",
+      name: "Danh sách p.t vi phạm",
+      url: "#",
       icon: CarFront,
-    },
-    {
-      name: "Nhận diện hình ảnh",
-      url: "image_ALPR",
-      icon: Image,
-    },
-    {
-      name: "Nhận diện video",
-      url: "video_ALPR",
-      icon: FileVideo,
-    },
-    {
-      name: "Nhận diện bằng Live-Camera",
-      url: "livecam_ALPR",
-      icon: Cctv,
     },
     {
       name: "Lịch sử",
@@ -146,15 +99,16 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar collapsible="icon" {...props}>
-
+    <Sidebar variant="inset" {...props}>
       <SidebarContent>
         <NavProjects projects={data.projects} />
+        <NavMain items={data.navMain} />
+        
+        {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   )
 }
