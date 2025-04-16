@@ -13,6 +13,7 @@ import time
 import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
+import paddle
 from paddleocr import PaddleOCR
 from ultralytics.utils.plotting import Annotator
 import torch
@@ -25,15 +26,16 @@ import os
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 import av
 import asyncio
-
+from collections import deque
 import imghdr
 from PIL import Image
+from typing import Dict
 
 
 
 class RecognitionModel:
     def __init__(self, model_name):
-        self.device = "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.recognition_model = self.load_model(model_name)
 
     def load_model(self, model_name):
@@ -81,8 +83,8 @@ class POCR:
         self.paddle_ocr = self.load_model()
 
     def load_model(self):
-        model = PaddleOCR(use_angle_cls=False, lang="en", show_log=False, use_mp=True)
-
+        use_gpu = paddle.device.is_compiled_with_cuda()
+        model = PaddleOCR(use_angle_cls=False, lang="en", show_log=False, use_mp=not use_gpu, use_gpu=use_gpu)
         return model
 
     def preprocess(self, img):
@@ -210,20 +212,23 @@ class ALPRModel_Image(ALPRModel):
     def __init__(self, recognition_model_name, alpr_model_weights):
         super().__init__(recognition_model_name, alpr_model_weights)
     def run(self, img_path, run_uuid):
+        start_time = time.time()
         img = cv.imread(img_path)
         results = self.recognition_model.predict_without_track(img)
         all_texts = []
-        save_path = f'/task_results/{run_uuid}'
+        save_path = f'public/task_results/{run_uuid}'
         order = 0
 
         os.makedirs(save_path, exist_ok=True)  # Tạo thư mục riêng theo UUID
 
         for r in results:
-            result = r.boxes.cpu()
+            result = r.boxes
             b = result.xyxy
             order += 1
+            
 
             for i, loc in enumerate(b):
+                object_name = r.names[int(result.cls[i])]
                 x1, x2 = int(loc[0]), int(loc[2])
                 y1, y2 = int(loc[1]), int(loc[3])
 
@@ -242,9 +247,12 @@ class ALPRModel_Image(ALPRModel):
                 cv.imwrite(f'{save_path}/warped_{order}.jpg', warped_lp)
 
                 text, score = self.paddle_ocr.ocr(warped_lp)
-                all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"{save_path}/annotated_{order}.jpg", "warped_lp": f"{save_path}/warped_{order}.jpg" })
+                all_texts.append({ "order": order, "text": text, "score": score, "annotated_lp": f"{save_path}/annotated_{order}.jpg", "warped_lp": f"{save_path}/warped_{order}.jpg", "vehicle_type": object_name })
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
         save_image_task_result(run_uuid, all_texts)
-        create_or_update_task(run_uuid, None, "image", "completed", img_path, None)
+        create_or_update_task(run_uuid, None, "image", "completed", img_path, elapsed_time)
         return {"uuid": run_uuid, "type": "image", "status": "completed", "results": all_texts}
 
 class ALPRModel_Video(ALPRModel):
@@ -264,7 +272,7 @@ class ALPRModel_Video(ALPRModel):
 
 
         # Tạo thư mục và khởi tạo vị trí lưu video
-        os.makedirs(f"task_results/{task_uuid}", exist_ok=True)
+        os.makedirs(f"public/task_results/{task_uuid}", exist_ok=True)
         output = cv.VideoWriter(f"task_results/{task_uuid}/{task_uuid}.mp4",
                                 cv.VideoWriter_fourcc(*'mp4v'),
                                 fps, size)
@@ -290,20 +298,22 @@ class ALPRModel_Video(ALPRModel):
             # Nếu frame hiện tại không phải là frame cần nhận diện thì vẽ kết quả nhận diện của frame trước đó lên frame hiện tại
             # và tiếp tục vòng lặp
             # Nếu frame hiện tại là frame cần nhận diện thì nhận diện và vẽ lên frame hiện tại
-            # ĐANG CẦN SỬA ĐỔI TỐI ƯU
-            if n_frame % n_skip_frame != 0:
-                if last_results is not None:
-                    annotated_frame, plates = self.plot_boxes(last_results, frame, True)
-                else:
-                    annotated_frame = frame
-                output.write(annotated_frame)
-                continue
+            if n_skip_frame > 0:
+                if n_frame % n_skip_frame != 0:
+                    if last_results is not None:
+                        annotated_frame, plates = self.plot_boxes(last_results, frame, True)
+                    else:
+                        annotated_frame = frame
+                    output.write(annotated_frame)
+                    continue
             last_results = self.recognition_model.predict(frame)
 
             annotated_frame, plates = self.plot_boxes(last_results, frame, False)
             if plates:
                 results.append({"timestamp": frame_index_to_timestamp(n_frame, fps),"frame_number": n_frame, "plates": plates})
             output.write(annotated_frame)
+
+        
         cap.release()
         output.release()
         cv.destroyAllWindows()
@@ -311,104 +321,159 @@ class ALPRModel_Video(ALPRModel):
         elapsed_time = end_time - start_time
         del self.recognition_model
         gc.collect()
+        # Ghi lại kết quả vào db
         results = {"uuid": task_uuid, "type": "video", "status": "completed","process_time": elapsed_time, "results": results}
         save_task_results(task_uuid, results["results"])
         create_or_update_task(task_uuid, None, "video", "completed", video_path, elapsed_time)
         
     def plot_boxes(self, results ,frame, isSkip):
+        # Khởi tạo Annotator để vẽ lên frame
         annotator = Annotator(frame)
+
+        # Khởi tạo danh sách lưu kết quả nhận diện biển số xe
         plates = []
+
+        # Lặp qua từng kết quả nhận diện
         for r in results:
             result = r.boxes
             if result.id is None:
                 continue
-                
-            objects_id = result.id
-            target_objects = ['car', 'motorcycle', 'bus', 'truck']
-            location_idx = []
-            for tar in target_objects:
-                temp_id = list(r.names.keys())[list(r.names.values()).index(tar)]
-                temp_check = np.where(result.cls == temp_id)
-                if len(temp_check[0]) > 0:
-                    for temp in temp_check[0]:
-                        location_idx.append((temp,tar))
+            for box in result:
+                # Lấy thông tin của từng box(Object)
+                cls_id = int(box.cls[0]) if box.cls is not None else -1
+                conf = float(box.conf[0]) if box.conf is not None else -1.0
+                xyxy = box.xyxy[0].tolist()
+                track_id = int(box.id[0]) if hasattr(box, "id") and box.id is not None else -1
+                object_name = r.names.get(cls_id, "unknown")
 
-            for i,vehicle in location_idx:
-                b = result.xyxy[i]
-                object_id = int(objects_id[i].item())
-                x1, y1, x2, y2 = map(int, b)
-                annotator.box_label((x1, y1, x2, y2), str(object_id), color=(0, 0, 255), txt_color=(255, 255, 255))
+                # Lấy toạ độ của box để vẽ Annotator
+                x1, y1, x2, y2 = map(int, xyxy)
+                annotator.box_label((x1, y1, x2, y2), str(track_id), color=(0, 0, 255), txt_color=(255, 255, 255))
 
-                if not isSkip:
+                # Kiểm tra frame có phải là frame cần bỏ qua không
+                # Nếu là frame cần bỏ qua thì không nhận diện biển số xe và không cần trả về kết quả
+                if not isSkip:  
                     vehicle_roi = frame[y1:y2, x1:x2]
+
                     # Kiểm tra nếu vùng cắt hợp lệ
                     if vehicle_roi.shape[0] > 0 and vehicle_roi.shape[1] > 0:
+
+                        # Chuyển đổi vùng cắt thành ảnh PIL để nhận diện biển số xe
+                        # và nhận diện biển số xe bằng wpodnet và paddleocr
                         vehicle_image = Image.fromarray(cv.cvtColor(vehicle_roi, cv.COLOR_BGR2RGB))
                         lpr_frame_prediction = self.wpodnet_predictor.predict(vehicle_image, scaling_ratio=1)
+
+                        # Kiểm tra độ tin cậy của dự đoán
+                        # Nếu độ tin cậy lớn hơn 0.5 thì nhận diện biển số xe
                         if lpr_frame_prediction.confidence > 0.5:
                             warped_lp = lpr_frame_prediction.warp()
                             warped_lp = np.asarray(warped_lp)
                             text, score = self.paddle_ocr.ocr(warped_lp)
-                            plates.append({"vehicle_id": object_id, "text": text, "confidence": score, "vehicle_type": vehicle, "plate_image": "None"})
+                            plates.append({"vehicle_id": track_id, "text": text, "confidence": score, "vehicle_type": object_name, "plate_image": "None"})
+        
         return annotator.result(), plates
 
 class ALPRModel_Stream(ALPRModel, VideoStreamTrack):
     kind = "video"
 
     def __init__(self, track, recognition_model_name, alpr_model_weights):
-        VideoStreamTrack.__init__(self)  # <- phải gọi riêng vì aiortc không dùng super()
+        VideoStreamTrack.__init__(self)
         ALPRModel.__init__(self, recognition_model_name, alpr_model_weights)
         self.track = track
-    async def recv(self):
-        frame = await self.track.recv()
-        img = frame.to_ndarray(format="bgr24")
-        last_results = self.recognition_model.predict(img)
-        annotated_frame, plates = self.plot_boxes(last_results, img, False)
-        # global latest_result
-        # latest_result = {
-        #     "plates": 1,
-        #     "timestamp": time.time()
-        # }
+        self.latest_frame = deque(maxlen=1)
+        self.latest_result = None
+        self.latest_annotated = None
 
-        new_frame = av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+        # Tạo 2 task async song song:
+        asyncio.create_task(self.frame_collector())
+        asyncio.create_task(self.process_frames())
+
+    async def frame_collector(self):
+        while True:
+            frame = await self.track.recv()
+            self.latest_frame.append(frame)
+
+    async def process_frames(self):
+        global latest_result
+        while True:
+            if self.latest_frame:
+                frame = self.latest_frame[-1]  # Lấy frame mới nhất nhưng không pop
+                img = frame.to_ndarray(format="bgr24")
+
+                # Nhận dạng nặng nhưng chạy async riêng
+                last_results = self.recognition_model.predict(img)
+                annotated_frame, plates = self.plot_boxes(last_results, img, False)
+
+                self.latest_result = plates
+                self.latest_annotated = annotated_frame
+                latest_result = {
+                    "plates": plates,
+                    "timestamp": time.time()
+                }
+
+            await asyncio.sleep(0.05)  # 20 FPS xử lý nhận dạng
+
+    async def recv(self):
+        while not self.latest_frame:
+            await asyncio.sleep(0.001)
+
+        frame = self.latest_frame[-1]  # hoặc pop() nếu muốn loại khỏi hàng đợi
+
+        if self.latest_annotated is not None:
+            output = self.latest_annotated
+        else:
+            # fallback nếu chưa xử lý kịp
+            output = frame.to_ndarray(format="bgr24")
+
+        new_frame = av.VideoFrame.from_ndarray(output, format="bgr24")
         new_frame.pts = frame.pts
         new_frame.time_base = frame.time_base
         return new_frame
     def plot_boxes(self, results ,frame, isSkip):
+        # Khởi tạo Annotator để vẽ lên frame
         annotator = Annotator(frame)
+
+        # Khởi tạo danh sách lưu kết quả nhận diện biển số xe
         plates = []
+
+        # Lặp qua từng kết quả nhận diện
         for r in results:
-            result = r.boxes.cpu()
+            result = r.boxes
             if result.id is None:
                 continue
-                
-            objects_id = result.id
-            target_objects = ['car', 'motorcycle', 'bus', 'truck']
-            location_idx = []
-            for tar in target_objects:
-                temp_id = list(r.names.keys())[list(r.names.values()).index(tar)]
-                temp_check = np.where(result.cls == temp_id)
-                if len(temp_check[0]) > 0:
-                    for temp in temp_check[0]:
-                        location_idx.append((temp,tar))
+            for box in result:
+                # Lấy thông tin của từng box(Object)
+                cls_id = int(box.cls[0]) if box.cls is not None else -1
+                conf = float(box.conf[0]) if box.conf is not None else -1.0
+                xyxy = box.xyxy[0].tolist()
+                track_id = int(box.id[0]) if hasattr(box, "id") and box.id is not None else -1
+                object_name = r.names.get(cls_id, "unknown")
 
-            for i,vehicle in location_idx:
-                b = result.xyxy[i]
-                object_id = int(objects_id[i].item())
-                x1, y1, x2, y2 = map(int, b)
-                annotator.box_label((x1, y1, x2, y2), str(object_id), color=(0, 0, 255), txt_color=(255, 255, 255))
+                # Lấy toạ độ của box để vẽ Annotator
+                x1, y1, x2, y2 = map(int, xyxy)
+                annotator.box_label((x1, y1, x2, y2), str(track_id), color=(0, 0, 255), txt_color=(255, 255, 255))
 
-                if not isSkip:
+                # Kiểm tra frame có phải là frame cần bỏ qua không
+                # Nếu là frame cần bỏ qua thì không nhận diện biển số xe và không cần trả về kết quả
+                if not isSkip:  
                     vehicle_roi = frame[y1:y2, x1:x2]
+
                     # Kiểm tra nếu vùng cắt hợp lệ
                     if vehicle_roi.shape[0] > 0 and vehicle_roi.shape[1] > 0:
+
+                        # Chuyển đổi vùng cắt thành ảnh PIL để nhận diện biển số xe
+                        # và nhận diện biển số xe bằng wpodnet và paddleocr
                         vehicle_image = Image.fromarray(cv.cvtColor(vehicle_roi, cv.COLOR_BGR2RGB))
                         lpr_frame_prediction = self.wpodnet_predictor.predict(vehicle_image, scaling_ratio=1)
+
+                        # Kiểm tra độ tin cậy của dự đoán
+                        # Nếu độ tin cậy lớn hơn 0.5 thì nhận diện biển số xe
                         if lpr_frame_prediction.confidence > 0.5:
                             warped_lp = lpr_frame_prediction.warp()
                             warped_lp = np.asarray(warped_lp)
                             text, score = self.paddle_ocr.ocr(warped_lp)
-                            plates.append({"vehicle_id": object_id, "text": text, "confidence": score, "vehicle_type": vehicle, "plate_image": "None"})
+                            plates.append({"vehicle_id": track_id, "text": text, "confidence": score, "vehicle_type": object_name, "plate_image": "None"})
+        
         return annotator.result(), plates
 
 def is_image(file_path: str) -> bool:
@@ -520,6 +585,7 @@ def save_image_task_result(task_id: str, results: list):
         score = item.get("score", -1)
         annotated_lp = item.get("annotated_lp")
         warped_lp = item.get("warped_lp")
+        vehicle_type = item.get("vehicle_type", "unknown")
 
 
 
@@ -534,7 +600,7 @@ def save_image_task_result(task_id: str, results: list):
             order,  # tạm dùng order làm vehicle_id
             text if text != -1 else None,
             score if score != -1 else None,
-            "unknown",  # không có trường vehicle_type → gán mặc định
+            vehicle_type, 
             warped_lp or None
         ))
         db.commit()
@@ -544,19 +610,17 @@ def run_ALPRModel_Video(model_path, weights_path, video_path, n_skip_frame, task
     alpr_video.run(video_path, n_skip_frame, task_uuid)
     
 
-def fake_detect_plates(frame):
-    h, w, _ = frame.shape
-    return [{"plate": "79A-123.46", "box": [int(0.3*w), int(0.5*h), int(0.6*w), int(0.6*h)]}]
-
 model_path = "api/model/yolov8n.pt"  # Model nhận diện phương tiện
-img_path = 'docs/sample/original/3.jpg'
 weights_path = "api/weights/wpodnet.pth"
-UPLOAD_FOLDER = "uploads" 
 
+# Khởi tạo mô hình nhận diện từ ảnh
+alpr_image = ALPRModel_Image(model_path, weights_path)
+UPLOAD_FOLDER = "public/uploads" 
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+active_streams: Dict[str, ALPRModel_Stream] = {}
 latest_result = {}  # Global lưu kết quả nhận diện
 websocket_clients = set()  # Danh sách client WebSocket đang kết nối
-
-alpr_image = ALPRModel_Image(model_path, weights_path)
 
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
@@ -569,10 +633,9 @@ db = mysql.connector.connect(
 )
 cursor = db.cursor()
 
-# sys.stdout = SpyOutput()
 
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 @app.get("/api/py/helloFastApi")
 def hello_fast_api():
@@ -601,7 +664,7 @@ async def start_image_task(file: UploadFile = File(...)):
     if not is_image(file_path):
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
-    create_or_update_task(task_uuid, None, "image", "processing", file_path)
+    create_or_update_task(task_uuid, None, "image", "processing", f"public/upload/{task_uuid}/{os.path.basename(file_path)}")
     text = alpr_image.run(file_path, task_uuid)
     return JSONResponse(content=text)
 
@@ -628,7 +691,7 @@ async def start_video_task(background_tasks: BackgroundTasks, file: UploadFile =
         os.remove(file_path)  # Delete invalid file
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid video")
     
-    create_or_update_task(task_uuid, None, "video", "processing", file_path)
+    create_or_update_task(task_uuid, None, "video", "processing", f"public/upload/{task_uuid}/{os.path.basename(file_path)}")
     background_tasks.add_task(run_ALPRModel_Video, model_path , weights_path, file_path, 5, task_uuid)
     return {"task_id": task_uuid, "type": "video", "status": "processing"}
 
@@ -685,16 +748,20 @@ async def get_task_status(task_id: str):
         "uuid": task_id,
         "type": task_type,
         "status": status,
+        "process_time": process_time,
+        "source_url": source_url,
         "results": results
+        
     }
 
 @app.post("/api/stream_offer")
 async def offer(request: Request):
     data = await request.json()
-    offer = RTCSessionDescription(sdp=data["sdp"], type=data["type"])
+    session_id = data["session_id"]  # ví dụ: "ea94fd12-b9e2..."
 
+    offer = RTCSessionDescription(sdp=data["sdp"], type=data["type"])
     pc = RTCPeerConnection()
-    
+
     @pc.on("track")
     def on_track(track):
         if track.kind == "video":
@@ -703,12 +770,13 @@ async def offer(request: Request):
                 recognition_model_name=model_path,
                 alpr_model_weights=weights_path
             )
+            active_streams[session_id] = model_stream
             pc.addTrack(model_stream)
 
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
-    
+
     return JSONResponse({
         "sdp": pc.localDescription.sdp,
         "type": pc.localDescription.type
@@ -731,3 +799,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # Mount frontend
 app.mount("/stream_test", StaticFiles(directory="api/frontend", html=True), name="frontend")
+
+print(f"Torch GPU CUDA available: {torch.cuda.is_available()}")
+gpu_available  = paddle.device.is_compiled_with_cuda()
+print("GPU available:", gpu_available)
+
+# import sys
+# import traceback
+
+# class SpyOutput:
+#     def write(self, msg):
+#         if msg.strip() == "6":
+#             print("6 Here:", file=sys.__stderr__)
+#             traceback.print_stack(file=sys.__stderr__)
+#         sys.__stdout__.write(msg)
+#     def flush(self):
+#         sys.__stdout__.flush()
+
+# sys.stdout = SpyOutput()

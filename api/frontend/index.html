@@ -19,37 +19,46 @@
       const localVideo = document.getElementById('local');
       const remoteVideo = document.getElementById('remote');
       const resultDiv = document.getElementById('results');
-
+    
+      // 1. Tạo session_id duy nhất cho mỗi phiên
+      const sessionId = crypto.randomUUID(); // ✅ cần hỗ trợ trình duyệt >= Chrome 92
+    
       // Gửi webcam qua WebRTC
       (async () => {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         localVideo.srcObject = stream;
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
+    
         pc.ontrack = (event) => {
           remoteVideo.srcObject = event.streams[0];
         };
-
+    
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-
+    
         const res = await fetch("/api/stream_offer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+          body: JSON.stringify({
+            sdp: pc.localDescription.sdp,
+            type: pc.localDescription.type,
+            session_id: sessionId // ✅ gửi session_id
+          })
         });
-
+    
         const answer = await res.json();
         await pc.setRemoteDescription(answer);
       })();
-
-      // Nhận JSON từ WebSocket
-      const socket = new WebSocket("ws://" + location.host + "/api/stream_ws");
+    
+      // Kết nối WebSocket với session_id
+      const socket = new WebSocket("ws://" + location.host + "/api/stream_ws?session_id=" + sessionId);
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        resultDiv.textContent = "📸 Biển số: " + data.plates.map(p => p.plate).join(", ") +
-                                " | Thời gian: " + new Date(data.timestamp * 1000).toLocaleTimeString();
+        resultDiv.textContent = "📸 Biển số: " +
+          (data.plates && data.plates.length > 0 ? data.plates.map(p => p.text).join(", ") : "Không phát hiện") +
+          " | Thời gian: " + new Date(data.timestamp * 1000).toLocaleTimeString();
       };
     </script>
+    
   </body>
 </html>
