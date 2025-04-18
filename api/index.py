@@ -819,3 +819,10 @@ print("GPU available:", gpu_available)
 #         sys.__stdout__.flush()
 
 # sys.stdout = SpyOutput()
+
+@app.get("/api/blacklist_vehicles")
+async def get_blacklist_vehicles():
+    cursor.execute("SELECT id, plate_number, vehicle_type, description, report_by, reported_at FROM blacklist_vehicles")
+    rows = cursor.fetchall()
+    blacklisted_vehicles = [{"id": row[0], "plate_text": row[1], "vehicle_type": row[2], "description": row[3], "report_by": row[4], "reported_at": row[5]} for row in rows]
+    return {"results": blacklisted_vehicles}

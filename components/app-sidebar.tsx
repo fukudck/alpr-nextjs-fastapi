@@ -86,7 +86,7 @@ const data = {
     },
     {
       name: "Danh sách p.t vi phạm",
-      url: "#",
+      url: "blacklisted_vehicles",
       icon: CarFront,
     },
     {
