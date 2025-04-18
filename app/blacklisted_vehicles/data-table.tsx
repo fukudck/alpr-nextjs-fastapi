@@ -19,7 +19,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Plus } from "lucide-react"
+import { Plus, Save } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -56,9 +74,60 @@ export function DataTable<TData, TValue>({
           }
           className="w-full max-w-lg"
         />
-        <Button className="ml-4">
-          <Plus /> Thêm
-        </Button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="ml-4"><Plus /> Thêm</Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Thêm phương tiện vi phạm</DialogTitle>
+              {/* <DialogDescription>
+                Make changes to your profile here. Click save when you're done.
+              </DialogDescription> */}
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="plate_number" className="text-right">
+                  Biển số
+                </Label>
+                <Input
+                  id="plate_number"
+                  defaultValue=""
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="type" className="text-right">
+                  Loại phương tiện
+                </Label>
+                <Select>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Loại phương tiện" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="dark">Dark</SelectItem>
+                    <SelectItem value="system">System</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="reason" className="text-right">
+                  Lý do
+                </Label>
+                <Input
+                  id="reason"
+                  defaultValue=""
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit"><Save/>Lưu</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
       </div>
 
       <div className="rounded-md border">

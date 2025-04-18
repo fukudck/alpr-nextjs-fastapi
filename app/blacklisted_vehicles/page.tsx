@@ -20,9 +20,10 @@ import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
 async function getData(): Promise<Data[]> {
-  const res = await fetch("http://localhost:8000/api/blacklist_vehicles");
+  const res = await fetch("http://localhost:8000/api/blacklist_vehicles", {
+    cache: "no-store",
+  });
   const json = await res.json();
-
   return json.results.map((item: any) => ({
     stt: item.id.toString(),
     plate_number: item.plate_text,
