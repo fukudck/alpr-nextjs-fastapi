@@ -21,7 +21,7 @@ export type Data = {
   type: string
   reason: string
   report_by: string
-  report_time : string
+  report_time : Date
 }   
 
 export const columns: ColumnDef<Data>[] = [

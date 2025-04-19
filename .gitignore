@@ -46,3 +46,4 @@ uploads
 task_results
 api/notebook.ipynb
 api/.ipynb_checkpoints/notebook-checkpoint.ipynb
+api/conn.py

@@ -819,3 +819,29 @@ async def get_blacklist_vehicles():
     rows = cursor.fetchall()
     blacklisted_vehicles = [{"id": row[0], "plate_text": row[1], "vehicle_type": row[2], "description": row[3], "report_by": row[4], "reported_at": row[5]} for row in rows]
     return {"results": blacklisted_vehicles}
+
+@app.post("/api/blacklist_vehicles/add")
+async def add_blacklist_vehicle(request: Request):
+    # Lấy dữ liệu JSON từ request body
+    data = await request.json()
+
+    plate_number = data.get("plate_text")
+    vehicle_type = data.get("vehicle_type")
+    description = data.get("description")
+    
+    if not plate_number or not vehicle_type or not description:
+        raise HTTPException(status_code=400, detail="Missing required fields")
+    
+    try:
+        # Thực thi query để thêm phương tiện vào blacklist
+        cursor.execute(
+            "INSERT INTO blacklist_vehicles (plate_number, vehicle_type, description, report_by) "
+            "VALUES (%s, %s, %s, %s)",
+            (plate_number, vehicle_type, description, 0)  # Thay 'admin' bằng ID người dùng nếu cần
+        )
+        db.commit()
+        return {"status": "success", "message": "Blacklisted vehicle added successfully"}
+    
+    except Exception as e:
+        db.rollback()  # Rollback nếu có lỗi xảy ra
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))

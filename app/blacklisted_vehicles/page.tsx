@@ -16,8 +16,8 @@ import {
 
 import { Data, columns } from "./columns"
 import { DataTable } from "./data-table"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { format } from 'date-fns';
+import { vi } from "date-fns/locale";
 
 async function getData(): Promise<Data[]> {
   const res = await fetch("http://localhost:8000/api/blacklist_vehicles", {
@@ -30,7 +30,7 @@ async function getData(): Promise<Data[]> {
     type: item.vehicle_type,
     reason: item.description,
     report_by: item.report_by,
-    report_time: item.reported_at,
+    report_time: format(new Date(item.reported_at), "EEEE, dd MMMM yyyy, HH:mm:ss", { locale: vi }),
   }));
 }
 
