@@ -7,8 +7,7 @@ import os
 import shutil
 import time
 import uuid
-import mysql.connector
-from pydantic import BaseModel
+from api.conn import db, cursor
 import time
 import cv2 as cv
 import numpy as np
@@ -626,13 +625,7 @@ websocket_clients = set()  # Danh sách client WebSocket đang kết nối
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
-db = mysql.connector.connect(
-    host="localhost",
-    port=3306,
-    user="root",
-    database="vehicle_detection"
-)
-cursor = db.cursor()
+
 
 
 

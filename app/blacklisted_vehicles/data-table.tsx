@@ -105,9 +105,11 @@ export function DataTable<TData, TValue>({
                     <SelectValue placeholder="Loại phương tiện" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
+                    <SelectItem value="car">Xe Hơi</SelectItem>
+                    <SelectItem value="motorbike">Xe Máy</SelectItem>
+                    <SelectItem value="bus">Xe Bus</SelectItem>
+                    <SelectItem value="truck">Xe Tải</SelectItem>
+                    
                   </SelectContent>
                 </Select>
               </div>
