@@ -1,4 +1,5 @@
 import gc
+from fastapi import APIRouter
 from fastapi import FastAPI , File, UploadFile, HTTPException, BackgroundTasks, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -628,7 +629,7 @@ app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
 db = mysql.connector.connect(
     host="localhost",
-    port=3306,
+    port=3307,
     user="root",
     database="vehicle_detection"
 )
@@ -819,3 +820,14 @@ print("GPU available:", gpu_available)
 #         sys.__stdout__.flush()
 
 # sys.stdout = SpyOutput()
+
+@app.get("/api/history")
+async def get_history():
+    try:
+        cursor.execute("SELECT id, type, status, source_url, process_time, created_at FROM tasks")
+        rows = cursor.fetchall()
+        history = [{"id": row[0], "type": row[1], "status": row[2], "source_url": row[3], "process_time": row[4], "created_at": row[5]} for row in rows]
+        return {"results": history}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))

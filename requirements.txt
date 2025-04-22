@@ -11,3 +11,4 @@ paddleocr
 python-multipart
 aiortc
 aiofiles
+mysql-connector-python

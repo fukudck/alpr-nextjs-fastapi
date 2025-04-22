@@ -7,28 +7,46 @@ import { ColumnDef } from "@tanstack/react-table"
 export type History = {
   id: string
   type: string
-  number_plate: string
-  timestamp: string // ngày giờ nhận diện
-  image_url: string // frame ảnh nhận diện
+  status: string
+  source_url: string
+  process_time: number
+  created_at: string
 }
 
 export const columns: ColumnDef<History>[] = [
     {
+      accessorKey: "id",
+      header: "ID",
+    },
+    {
     accessorKey: "type",
-    header: "Loại xe",
+    header: "Loại nhận diện",
     },
     {
-    accessorKey: "number_plate",
-    header: "Biển số",
+      accessorKey: "status",
+      header: "Trạng thái",
     },
     {
-    accessorKey: "timestamp",
-    header: "Thời gian",
+      accessorKey: "source_url",
+      header: "URL nguồn",
+    },
+    {
+      accessorKey: "process_time",
+      header: "Thời gian xử lý (ms)",
+    },
+    {
+      accessorKey: "created_at",
+      header: "Thời gian tạo",
     cell: ({ row }) => {
-      const timestamp = row.original.timestamp;
-      const date = new Date(timestamp);
-      return date.toLocaleString("vi-VN"); // Chuyển sang định dạng ngày giờ kiểu Việt Nam
+        const date = new Date(row.getValue("created_at"));
+        return date.toLocaleString("vi-VN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      },
     },
-    },
-    
 ]
