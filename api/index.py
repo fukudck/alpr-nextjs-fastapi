@@ -1,4 +1,5 @@
 import gc
+from fastapi import APIRouter
 from fastapi import FastAPI , File, UploadFile, HTTPException, BackgroundTasks, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -813,6 +814,15 @@ print("GPU available:", gpu_available)
 
 # sys.stdout = SpyOutput()
 
+
+@app.get("/api/history")
+async def get_history():
+    try:
+        cursor.execute("SELECT id, type, status, source_url, process_time, created_at FROM tasks")
+        rows = cursor.fetchall()
+        history = [{"id": row[0], "type": row[1], "status": row[2], "source_url": row[3], "process_time": row[4], "created_at": row[5]} for row in rows]
+        return {"results": history}
+
 @app.get("/api/blacklist_vehicles")
 async def get_blacklist_vehicles():
     cursor.execute("SELECT id, plate_number, vehicle_type, description, report_by, reported_at FROM blacklist_vehicles")
@@ -853,6 +863,7 @@ async def remove_blacklist_vehicle_from_db(vehicle_id):
         cursor.execute("DELETE FROM blacklist_vehicles WHERE id = %s", (vehicle_id,))
         db.commit()
         return {"status": "success", "message": "Blacklisted vehicle removed successfully"}
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
