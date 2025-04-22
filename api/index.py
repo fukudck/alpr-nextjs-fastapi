@@ -30,7 +30,7 @@ import imghdr
 from PIL import Image
 from typing import Dict
 
-
+print("Loading models...")
 
 class RecognitionModel:
     def __init__(self, model_name):
@@ -844,4 +844,15 @@ async def add_blacklist_vehicle(request: Request):
     
     except Exception as e:
         db.rollback()  # Rollback nếu có lỗi xảy ra
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+    
+@app.delete("/api/blacklist_vehicles/delete/{vehicle_id}")
+async def remove_blacklist_vehicle_from_db(vehicle_id):
+    try:
+        # Thực thi query để xóa phương tiện khỏi blacklist
+        cursor.execute("DELETE FROM blacklist_vehicles WHERE id = %s", (vehicle_id,))
+        db.commit()
+        return {"status": "success", "message": "Blacklisted vehicle removed successfully"}
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail="Database error: " + str(e))

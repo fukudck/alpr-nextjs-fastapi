@@ -1,7 +1,19 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
+import { MoreHorizontal, Pencil, Trash } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -23,11 +35,18 @@ export type Data = {
   report_by: string
   report_time : Date
 }   
-
+const handleDelete = (id:string) => {
+  if (!id) return
+  fetch(`http://localhost:8000/api/blacklist_vehicles/delete/${id}`, {
+    method: "DELETE",
+  }).then(() => {
+    window.location.reload()
+  })
+}
 export const columns: ColumnDef<Data>[] = [
   {
     accessorKey: "stt",
-    header: "Số thứ tự",
+    header: "ID",
   },
   {
     accessorKey: "plate_number",
@@ -51,6 +70,7 @@ export const columns: ColumnDef<Data>[] = [
   },
   {
     id: "actions",
+    
     cell: ({ row }) => {
       const data = row.original
  
@@ -63,15 +83,44 @@ export const columns: ColumnDef<Data>[] = [
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
+            <DropdownMenuLabel>Hành động</DropdownMenuLabel>
+            {/* <DropdownMenuItem
               onClick={() => navigator.clipboard.writeText(data.stt)}
             >
-              Copy payment ID
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>View customer</DropdownMenuItem>
-            <DropdownMenuItem>View payment details</DropdownMenuItem>
+              <Pencil/> Sửa
+            </DropdownMenuItem> */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <Trash/>Xóa
+                </DropdownMenuItem>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Bạn có chắc muốn xóa?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Hành động này sẽ không thể hoàn tác.
+                    {data.stt && <div className="mt-2 text-red-500">ID: {data.stt}</div>}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Hủy</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => {
+                    fetch(`http://localhost:8000/api/blacklist_vehicles/delete/${data.stt}`, {
+                      method: "DELETE",
+                    }).then(() => {
+                      window.location.reload()
+                    })
+                  }}>Tiếp tục
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            {/* <DropdownMenuSeparator /> */}
+            {/* <DropdownMenuItem>View customer</DropdownMenuItem>
+            <DropdownMenuItem>View payment details</DropdownMenuItem> */}
           </DropdownMenuContent>
         </DropdownMenu>
       )

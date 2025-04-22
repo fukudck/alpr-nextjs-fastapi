@@ -23,11 +23,17 @@ async function getData(): Promise<Data[]> {
   const res = await fetch("http://localhost:8000/api/blacklist_vehicles", {
     cache: "no-store",
   });
+  const typeMap = {
+    car: "Xe Hơi",
+    motorbike: "Xe Máy",
+    bus: "Xe Bus",
+    truck: "Xe Tải",
+  } as const;
   const json = await res.json();
   return json.results.map((item: any) => ({
     stt: item.id.toString(),
     plate_number: item.plate_text,
-    type: item.vehicle_type,
+    type: typeMap[item.vehicle_type as keyof typeof typeMap] || "Không xác định",
     reason: item.description,
     report_by: item.report_by,
     report_time: format(new Date(item.reported_at), "EEEE, dd MMMM yyyy, HH:mm:ss", { locale: vi }),
