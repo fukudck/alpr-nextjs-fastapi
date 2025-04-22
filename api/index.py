@@ -7,8 +7,7 @@ import os
 import shutil
 import time
 import uuid
-import mysql.connector
-from pydantic import BaseModel
+from api.conn import db, cursor
 import time
 import cv2 as cv
 import numpy as np
@@ -31,7 +30,7 @@ import imghdr
 from PIL import Image
 from typing import Dict
 
-
+print("Loading models...")
 
 class RecognitionModel:
     def __init__(self, model_name):
@@ -626,13 +625,7 @@ websocket_clients = set()  # Danh sách client WebSocket đang kết nối
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
-db = mysql.connector.connect(
-    host="localhost",
-    port=3306,
-    user="root",
-    database="vehicle_detection"
-)
-cursor = db.cursor()
+
 
 
 
@@ -819,3 +812,47 @@ print("GPU available:", gpu_available)
 #         sys.__stdout__.flush()
 
 # sys.stdout = SpyOutput()
+
+@app.get("/api/blacklist_vehicles")
+async def get_blacklist_vehicles():
+    cursor.execute("SELECT id, plate_number, vehicle_type, description, report_by, reported_at FROM blacklist_vehicles")
+    rows = cursor.fetchall()
+    blacklisted_vehicles = [{"id": row[0], "plate_text": row[1], "vehicle_type": row[2], "description": row[3], "report_by": row[4], "reported_at": row[5]} for row in rows]
+    return {"results": blacklisted_vehicles}
+
+@app.post("/api/blacklist_vehicles/add")
+async def add_blacklist_vehicle(request: Request):
+    # Lấy dữ liệu JSON từ request body
+    data = await request.json()
+
+    plate_number = data.get("plate_text")
+    vehicle_type = data.get("vehicle_type")
+    description = data.get("description")
+    
+    if not plate_number or not vehicle_type or not description:
+        raise HTTPException(status_code=400, detail="Missing required fields")
+    
+    try:
+        # Thực thi query để thêm phương tiện vào blacklist
+        cursor.execute(
+            "INSERT INTO blacklist_vehicles (plate_number, vehicle_type, description, report_by) "
+            "VALUES (%s, %s, %s, %s)",
+            (plate_number, vehicle_type, description, 0)  # Thay 'admin' bằng ID người dùng nếu cần
+        )
+        db.commit()
+        return {"status": "success", "message": "Blacklisted vehicle added successfully"}
+    
+    except Exception as e:
+        db.rollback()  # Rollback nếu có lỗi xảy ra
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+    
+@app.delete("/api/blacklist_vehicles/delete/{vehicle_id}")
+async def remove_blacklist_vehicle_from_db(vehicle_id):
+    try:
+        # Thực thi query để xóa phương tiện khỏi blacklist
+        cursor.execute("DELETE FROM blacklist_vehicles WHERE id = %s", (vehicle_id,))
+        db.commit()
+        return {"status": "success", "message": "Blacklisted vehicle removed successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
