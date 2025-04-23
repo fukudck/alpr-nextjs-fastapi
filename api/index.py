@@ -30,8 +30,12 @@ from collections import deque
 import imghdr
 from PIL import Image
 from typing import Dict
-
 print("Loading models...")
+import mysql.connector
+import hashlib
+from fastapi import FastAPI, Request
+# CORS middleware
+from fastapi.middleware.cors import CORSMiddleware
 
 class RecognitionModel:
     def __init__(self, model_name):
@@ -867,3 +871,48 @@ async def remove_blacklist_vehicle_from_db(vehicle_id):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # hoặc ["*"] nếu muốn mở toàn bộ
+    allow_credentials=True,
+    allow_methods=["*"],  # Cho phép tất cả method: GET, POST, PUT, OPTIONS,...
+    allow_headers=["*"],  # Cho phép tất cả headers
+)
+
+
+
+
+@app.post("/api/login")
+async def login(request: Request):
+    try:
+        data = await request.json()
+        email = data.get("email")
+        password = data.get("password")
+
+        conn = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="",
+            database="vehicle_detection"
+        )
+        cursor = conn.cursor(dictionary=True)  # <- BẮT BUỘC để có thể dùng user["password"]
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not user:
+            return JSONResponse(content={"message": "Người dùng không tồn tại!"}, status_code=404)
+
+        if password == user["password"]:
+            return JSONResponse(content={"message": "Đăng nhập thành công"}, status_code=200)
+        else:
+            return JSONResponse(content={"message": "Sai mật khẩu"}, status_code=401)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(content={"message": f"Lỗi hệ thống: {str(e)}"}, status_code=500)
