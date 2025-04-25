@@ -1,97 +1,193 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbPage, BreadcrumbList } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { image_ocr, columns } from "./columns";
-import { DataTable } from "./data-table";
-import { Input } from "@/components/ui/input";
+import { AppSidebar } from "@/components/app-sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { CloudUpload } from "lucide-react";
+import * as React from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  FileUpload,
+  FileUploadDropzone,
+  FileUploadItem,
+  FileUploadItemDelete,
+  FileUploadItemMetadata,
+  FileUploadItemPreview,
+  FileUploadItemProgress,
+  FileUploadList,
+  FileUploadTrigger,
+} from "@/components/ui/file-upload";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { getData } from "@/lib/getData"; // Import hàm từ Server Component
-import { set } from "react-hook-form";
+import { Upload, X } from "lucide-react";
+
+const formSchema = z.object({
+  files: z
+    .array(z.custom<File>())
+    .length(1, "You must upload at least 1 file")
+    .refine((files) => files.every((file) => file.size <= 500 * 1024 * 1024), {
+      message: "File size must be less than 5MB",
+      path: ["files"],
+    }),
+});
+ 
+
+type FormValues = z.infer<typeof formSchema>;
+
 
 export default function Page() {
-  const [image, setImage] = useState<string | null>(null);
-  const [data, setData] = useState<image_ocr[]>([]);
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      files: [],
+    },
+  });
 
-  useEffect(() => {
-    async function fetchData() {
-      const result = await getData();
-      setData(result);
+  const onSubmit = React.useCallback((data: FormValues) => {
+    const formData = new FormData();
+    
+    // Kiểm tra xem có file nào trong data.files không
+    if (data.files && data.files.length > 0) {
+      formData.append("file", data.files[0]);  // Lấy file đầu tiên từ mảng files
     }
-    fetchData();
+    
+    fetch(`http://localhost:8000/api/image_LPR`, {
+      method: "POST",
+      body: formData,
+      headers: {
+        // Content-Type không cần thiết, FormData sẽ tự động thiết lập header đúng
+      },
+      cache: "no-store",
+    })
+    .then(response => response.json())
+    .then(result => {
+      // Xử lý kết quả từ API
+      console.log(result.uuid);
+      window.location.href = `/results?uuid=${result.uuid}`; // Chuyển hướng đến trang kết quả với UUID
+    })
+    .catch(error => {
+      // Xử lý lỗi
+      console.error("Error:", error);
+    });
   }, []);
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setImage(URL.createObjectURL(file));
-    } else {
-      setImage(null);
-    }
-  };
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const file = formData.get("file") as File;
-    setImage(URL.createObjectURL(file)); // Hiển thị ảnh đã tải lên
-  }
+  
   
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2">
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <Breadcrumb>
               <BreadcrumbList>
+                
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Nhận diện biển số bằng hình ảnh</BreadcrumbPage>
+                  <BreadcrumbPage>Nhận dạng phương tiện vi phạm - Hình ảnh</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
-
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-10">
-            {/* Bảng dữ liệu */}
-            <div className="col-span-7 rounded-xl">
-              <div className="container mx-auto py-10">
-                <DataTable columns={columns} data={data} />
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0 justify-center  items-center">
+          
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full max-w-md">
+              <FormField
+                control={form.control}
+                name="files"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <FileUpload
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        accept="image/*"
+                        
+                        maxFiles={1}
+                        maxSize={500 * 1024 * 1024}
+                        onFileReject={(_, message) => {
+                          form.setError("files", {
+                            message,
+                          });
+                        }}
+                        
+                      >
+                        <FileUploadDropzone>
+                        <div className="flex flex-col items-center gap-1 ">
+                          <div className="flex items-center justify-center rounded-full border p-2.5">
+                            <Upload className="size-6 text-muted-foreground" />
+                          </div>
+                          <p className="font-medium text-sm">Kéo và thả tệp tin vào đây</p>
+                          <p className="text-muted-foreground text-xs">
+                            Hoặc nhấp để chọn tệp tin từ thiết bị của bạn
+                          </p>
+                        </div>
+                        <FileUploadTrigger asChild>
+                          <Button variant="outline" size="sm" className="mt-2 w-fit">
+                            <CloudUpload className="size-4 mr-2" /> Chọn tệp tin
+                          </Button>
+                        </FileUploadTrigger>
+                      </FileUploadDropzone>
+                        <FileUploadList>
+                          {field.value.map((file, index) => (
+                            <FileUploadItem key={index} value={file}>
+                              <FileUploadItemPreview />
+                              <FileUploadItemMetadata />
+                              <FileUploadItemDelete asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7"
+                                >
+                                  <X />
+                                  <span className="sr-only">Delete</span>
+                                </Button>
+                              </FileUploadItemDelete>
+                            </FileUploadItem>
+                          ))}
+                        </FileUploadList>
+                      </FileUpload>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-center mt-4">
+                <Button type="submit">
+                  Submit
+                </Button>
               </div>
-            </div>
-
-            {/* Form Upload */}
-            <div className="justify-center flex col-span-3 rounded-xl bg-muted/70 py-10">
-              <div className="w-full max-w-sm items-center gap-1.5 justify-center">
-                <form onSubmit={handleSubmit} className="flex  flex-col">
-                  <div className="grid gap-4 py-2">
-                    <Input
-                      type="file" id="file" name="file" accept=".jpg, .jpeg, .png"className="w-full" onChange={handleFileChange}
-                    />
-
-                    {/* Hiển thị ảnh upload */}
-                    {image && (
-                      <div className="flex justify-center">
-                        <img src={image} alt="Ảnh đã tải lên" className="rounded-lg max-w-50% h-auto" />
-                      </div>
-                    )}
-
-                    <Button className="w-full" variant="default">
-                      Nhận diện biển số
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
+            </form>
+          </Form>
         </div>
       </SidebarInset>
     </SidebarProvider>
-  );
+  )
 }

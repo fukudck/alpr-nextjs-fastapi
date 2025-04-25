@@ -35,14 +35,7 @@ export type Data = {
   report_by: string
   report_time : Date
 }   
-const handleDelete = (id:string) => {
-  if (!id) return
-  fetch(`http://localhost:8000/api/blacklist_vehicles/delete/${id}`, {
-    method: "DELETE",
-  }).then(() => {
-    window.location.reload()
-  })
-}
+
 export const columns: ColumnDef<Data>[] = [
   {
     accessorKey: "stt",
