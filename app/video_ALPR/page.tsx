@@ -16,7 +16,6 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CloudUpload } from "lucide-react";
 import * as React from "react";
@@ -69,25 +68,32 @@ export default function Page() {
   });
 
   const onSubmit = React.useCallback((data: FormValues) => {
-    console.log(data);
-    // toast("Submitted values:", {
-    //   description: (
-    //     <pre className="mt-2 w-80 rounded-md bg-accent/30 p-4 text-accent-foreground">
-    //       <code>
-    //         {JSON.stringify(
-    //           data.files.map((file) =>
-    //             file.name.length > 25
-    //               ? `${file.name.slice(0, 25)}...`
-    //               : file.name,
-    //           ),
-    //           null,
-    //           2,
-    //         )}
-    //       </code>
-    //     </pre>
-    //   ),
-    // });
-  }, []);
+      const formData = new FormData();
+      
+      // Kiểm tra xem có file nào trong data.files không
+      if (data.files && data.files.length > 0) {
+        formData.append("file", data.files[0]);  // Lấy file đầu tiên từ mảng files
+      }
+      
+      fetch(`http://localhost:8000/api/video_LPR`, {
+        method: "POST",
+        body: formData,
+        headers: {
+          // Content-Type không cần thiết, FormData sẽ tự động thiết lập header đúng
+        },
+        cache: "no-store",
+      })
+      .then(response => response.json())
+      .then(result => {
+        // Xử lý kết quả từ API
+        console.log(result.uuid);
+        window.location.href = `/results?uuid=${result.uuid}`; // Chuyển hướng đến trang kết quả với UUID
+      })
+      .catch(error => {
+        // Xử lý lỗi
+        console.error("Error:", error);
+      });
+    }, []);
   return (
     <SidebarProvider>
       <AppSidebar />

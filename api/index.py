@@ -273,8 +273,10 @@ class ALPRModel_Video(ALPRModel):
         # Tạo thư mục và khởi tạo vị trí lưu video
         os.makedirs(f"public/task_results/{task_uuid}", exist_ok=True)
         output = cv.VideoWriter(f"public/task_results/{task_uuid}/{task_uuid}.mp4",
-                                cv.VideoWriter_fourcc(*'mp4v'),
-                                fps, size)
+                        cv.VideoWriter_fourcc(*'avc1'),
+                        fps, size)
+
+
         
         # Khởi tạo biến lưu kết quả
         results = []
@@ -687,7 +689,7 @@ async def start_video_task(background_tasks: BackgroundTasks, file: UploadFile =
     
     create_or_update_task(task_uuid, None, "video", "processing", f"/uploads/{task_uuid}/{os.path.basename(file_path)}")
     background_tasks.add_task(run_ALPRModel_Video, model_path , weights_path, file_path, 5, task_uuid)
-    return {"task_id": task_uuid, "type": "video", "status": "processing"}
+    return {"uuid": task_uuid, "type": "video", "status": "processing"}
 
 @app.get("/task-status/{task_id}")
 async def get_task_status(task_id: str):
@@ -696,7 +698,7 @@ async def get_task_status(task_id: str):
     task_row = cursor.fetchone()
     
     if not task_row:
-        return {"status": "not_found"}
+        raise HTTPException(status_code=404, detail="not_found")
     
     task_type, status, source_url, process_time = task_row
 
