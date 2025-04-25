@@ -11,4 +11,8 @@ paddleocr
 python-multipart
 aiortc
 aiofiles
+
 opencv-python
+
+mysql-connector-python
+

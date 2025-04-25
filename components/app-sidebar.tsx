@@ -91,7 +91,7 @@ const data = {
     },
     {
       name: "Lịch sử",
-      url: "#",
+      url: "history",
       icon: History,
     },
   ],
