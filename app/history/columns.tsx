@@ -1,14 +1,22 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-
+import { MoreHorizontal } from "lucide-react"
 // This type is used to define the shape of our data.
 // You can use a Zod schema here if you want.
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 export type History = {
   id: string
   type: string
   status: string
-  source_url: string
   process_time: number
   created_at: string
 }
@@ -17,19 +25,49 @@ export const columns: ColumnDef<History>[] = [
     {
       accessorKey: "id",
       header: "ID",
+      
     },
     {
     accessorKey: "type",
     header: "Loại nhận diện",
+    cell: ({ row }) => {
+      const type = row.getValue("type");
+
+      if (type === "image") {
+        return (
+          <div>🖼️ Ảnh </div>
+        );
+      }
+      if (type === "video") {
+        return (
+          <div>🎥 Video</div>
+        );
+      }
+      return (
+        <div>❔ Không xác định</div>
+      );
+    },
     },
     {
       accessorKey: "status",
       header: "Trạng thái",
-    },
-    {
-      accessorKey: "source_url",
-      header: "URL nguồn",
-    },
+      cell: ({ row }) => {
+        const status = row.getValue("status")
+
+        if (status === "processing") {
+          return <span className="text-yellow-500">⏳ Đang xử lý</span>
+        }
+
+        if (status === "completed") {
+          return <span className="text-green-500">✅ Hoàn thành</span>
+        }
+        return (
+          <div className="flex items-center gap-2 text-gray-500">
+            ❔ Không xác định
+          </div>
+        );
+      },
+    }, 
     {
       accessorKey: "process_time",
       header: "Thời gian xử lý (ms)",
@@ -47,6 +85,31 @@ export const columns: ColumnDef<History>[] = [
           minute: "2-digit",
           second: "2-digit",
         });
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const payment = row.original
+        const id = row.getValue("id") as string;
+        const url = `http://localhost:3000/results?uuid=${id}`;
+   
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Tùy chọn</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <a href={url}><DropdownMenuItem>Xem kết quả</DropdownMenuItem></a>
+              <DropdownMenuItem className="hover:!bg-red-500">Xóa</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
       },
     },
 ]
