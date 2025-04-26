@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbPage, BreadcrumbList } from "@/components/ui/breadcrumb";
@@ -18,7 +16,6 @@ async function getData(): Promise<History[]> {
     id: item.id,
     type: item.type,
     status: item.status,
-    source_url: item.source_url,
     process_time: item.process_time,
     created_at: item.created_at, 
   }));

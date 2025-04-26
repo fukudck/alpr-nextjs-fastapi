@@ -829,7 +829,7 @@ async def get_history():
     try:
         cursor.execute("SELECT id, type, status, source_url, process_time, created_at FROM tasks")
         rows = cursor.fetchall()
-        history = [{"id": row[0], "type": row[1], "status": row[2], "source_url": row[3], "process_time": row[4], "created_at": row[5]} for row in rows]
+        history = [{"id": row[0], "type": row[1], "status": row[2], "process_time": row[4], "created_at": row[5]} for row in rows]
         return {"results": history}
     except Exception as e:
         db.rollback()
