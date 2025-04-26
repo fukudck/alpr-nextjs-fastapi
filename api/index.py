@@ -627,6 +627,14 @@ websocket_clients = set()  # Danh sách client WebSocket đang kết nối
 ### Create FastAPI instance with custom docs and openapi url
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # hoặc ["*"] nếu muốn mở toàn bộ
+    allow_credentials=True,
+    allow_methods=["*"],  # Cho phép tất cả method: GET, POST, PUT, OPTIONS,...
+    allow_headers=["*"],  # Cho phép tất cả headers
+)
+
 
 
 
