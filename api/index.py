@@ -31,11 +31,6 @@ import imghdr
 from PIL import Image
 from typing import Dict
 print("Loading models...")
-import mysql.connector
-import hashlib
-from fastapi import FastAPI, Request
-# CORS middleware
-from fastapi.middleware.cors import CORSMiddleware
 
 class RecognitionModel:
     def __init__(self, model_name):
@@ -828,6 +823,9 @@ async def get_history():
         rows = cursor.fetchall()
         history = [{"id": row[0], "type": row[1], "status": row[2], "source_url": row[3], "process_time": row[4], "created_at": row[5]} for row in rows]
         return {"results": history}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
 @app.get("/api/blacklist_vehicles")
 async def get_blacklist_vehicles():
@@ -874,19 +872,6 @@ async def remove_blacklist_vehicle_from_db(vehicle_id):
         db.rollback()
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # hoặc ["*"] nếu muốn mở toàn bộ
-    allow_credentials=True,
-    allow_methods=["*"],  # Cho phép tất cả method: GET, POST, PUT, OPTIONS,...
-    allow_headers=["*"],  # Cho phép tất cả headers
-)
-
-
-
-
 @app.post("/api/login")
 async def login(request: Request):
     try:
@@ -894,18 +879,9 @@ async def login(request: Request):
         email = data.get("email")
         password = data.get("password")
 
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",
-            database="vehicle_detection"
-        )
-        cursor = conn.cursor(dictionary=True)  # <- BẮT BUỘC để có thể dùng user["password"]
+
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
         if not user:
             return JSONResponse(content={"message": "Người dùng không tồn tại!"}, status_code=404)
 
