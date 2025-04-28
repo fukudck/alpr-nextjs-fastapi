@@ -12,7 +12,7 @@
 
 - [📦 Cài đặt pnpm trên Windows](#-cài-đặt-pnpm-trên-windows)
 - [🚀 Chạy dự án](#-chạy-dự-án)
-- [⚙️ Thay đổi Port cho API](#️-thay-đổi-port-cho-api)
+- [⚙️ Cài đặt Database](#️-cài-đặt-database)
 - [🌐 Link GitHub](#-link-github)
 
 ---
@@ -46,9 +46,10 @@ pnpm install
 pnpm dev
 ```
 
+
 ---
 
-## ⚙️ Thay đổi Port cho API
+## ⚙️ Cài đặt Database
 
 Để thay đổi **port** trong API:
 
