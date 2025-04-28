@@ -43,7 +43,7 @@ export function AddForm() {
         .regex(plateRegex, {
           message: "Biển số không đúng định dạng. VD: 50L1-12345 hoặc 29A-1234",
         }),
-      vehicle_type: z.enum(["car", "motorbike", "bus", "truck"], {
+      vehicle_type: z.enum(["car", "motorcycle", "bus", "truck"], {
         required_error: "Vui lòng chọn loại phương tiện",
       }),
       reason: z.string().min(1, "Vui lòng nhập lý do"),
@@ -128,7 +128,7 @@ export function AddForm() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="car">Xe Hơi</SelectItem>
-                          <SelectItem value="motorbike">Xe Máy</SelectItem>
+                          <SelectItem value="motorcycle">Xe Máy</SelectItem>
                           <SelectItem value="bus">Xe Bus</SelectItem>
                           <SelectItem value="truck">Xe Tải</SelectItem>
                         </SelectContent>
