@@ -128,7 +128,7 @@ export function AddForm() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="car">Xe Hơi</SelectItem>
-                          <SelectItem value="motorbike">Xe Máy</SelectItem>
+                          <SelectItem value="motorcycle">Xe Máy</SelectItem>
                           <SelectItem value="bus">Xe Bus</SelectItem>
                           <SelectItem value="truck">Xe Tải</SelectItem>
                         </SelectContent>

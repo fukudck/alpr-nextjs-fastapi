@@ -25,7 +25,7 @@ async function getData(): Promise<Data[]> {
   });
   const typeMap = {
     car: "Xe Hơi",
-    motorbike: "Xe Máy",
+    motorcycle: "Xe Máy",
     bus: "Xe Bus",
     truck: "Xe Tải",
   } as const;
