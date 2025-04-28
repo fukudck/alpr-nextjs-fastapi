@@ -6,6 +6,17 @@ import { MoreHorizontal } from "lucide-react"
 // You can use a Zod schema here if you want.
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -106,7 +117,35 @@ export const columns: ColumnDef<History>[] = [
               <DropdownMenuLabel>Tùy chọn</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <a href={url}><DropdownMenuItem>Xem kết quả</DropdownMenuItem></a>
-              <DropdownMenuItem className="hover:!bg-red-500">Xóa</DropdownMenuItem>
+              <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <DropdownMenuItem className="hover:!bg-red-500 hover:!text-white"
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Xóa
+                </DropdownMenuItem>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Bạn có chắc muốn xóa?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Hành động này sẽ không thể hoàn tác.
+                    {id && <div className="mt-2 text-red-500">ID: {id}</div>}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Hủy</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => {
+                    fetch(`http://localhost:8000/api/history/delete/${id}`, {
+                      method: "DELETE",
+                    }).then(() => {
+                      window.location.reload()
+                    })
+                  }}>Tiếp tục
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             </DropdownMenuContent>
           </DropdownMenu>
         )

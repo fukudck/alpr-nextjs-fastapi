@@ -834,6 +834,20 @@ async def get_history():
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
+    
+@app.delete("/api/history/delete/{task_id}")
+async def delete_history_task(task_id: str):
+    try:
+        cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+        if cursor.rowcount == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Task not found")
+        db.commit()
+        return {"status": "success", "message": "Task deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
 
 @app.get("/api/blacklist_vehicles")
 async def get_blacklist_vehicles():
@@ -857,9 +871,9 @@ async def add_blacklist_vehicle(request: Request):
     try:
         # Thực thi query để thêm phương tiện vào blacklist
         cursor.execute(
-            "INSERT INTO blacklist_vehicles (plate_number, vehicle_type, description, report_by) "
-            "VALUES (%s, %s, %s, %s)",
-            (plate_number, vehicle_type, description, 0)  # Thay 'admin' bằng ID người dùng nếu cần
+            "INSERT INTO blacklist_vehicles (plate_number, vehicle_type, description) "
+            "VALUES (%s, %s, %s)",
+            (plate_number, vehicle_type, description)  # Thay 'admin' bằng ID người dùng nếu cần
         )
         db.commit()
         return {"status": "success", "message": "Blacklisted vehicle added successfully"}
