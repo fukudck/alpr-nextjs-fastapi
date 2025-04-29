@@ -79,11 +79,11 @@ const data = {
     },
   ],
   projects: [
-    {
-      name: "Trang Chủ",
-      url: "#",
-      icon: House,
-    },
+    // {
+    //   name: "Trang Chủ",
+    //   url: "#",
+    //   icon: House,
+    // },
     {
       name: "Danh sách p.t vi phạm",
       url: "blacklisted_vehicles",
@@ -106,9 +106,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         
         {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
-      <SidebarFooter>
+      {/* <SidebarFooter>
         <NavUser user={data.user} />
-      </SidebarFooter>
+      </SidebarFooter> */}
     </Sidebar>
   )
 }
